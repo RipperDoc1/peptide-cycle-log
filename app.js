@@ -14,7 +14,7 @@ let view = 'home', prevView = 'home';
 let profile = null, loaded = false, editingProfile = false;
 let isOwner = false, testers = null, rosterSync = null;
 const LS_PROFILE = 'peptide-profile-v1';
-const collapsed = new Set();   // cards on the Today view with details folded away
+const collapsed = new Set();   // cards on the Today view whose details the viewer opened (closed by default)
 const openRows = new Set();    // collapsed rows the viewer has expanded
 let selDays = new Set([1,2,3,4,5]);
 let store = null;       // {save(c), remove(id)}
@@ -340,7 +340,7 @@ const todaySub = !cycles.length ? 'Your daily doses appear here.'
 const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
 ? startCta('Set up your protocol', 'Add the peptides you take to build your schedule. Today’s doses, progress, and vial counts will show up here.')
-: due.length ? due.map(x => card(x, !collapsed.has(x.c.id))).join('')
+: due.length ? due.map(x => card(x, collapsed.has(x.c.id))).join('')
 : `<div class="pempty quiet"><h3>No dose today</h3>${nextUp ? `<p>Next: ${esc(nextUp.c.name)} ${dayWord(nextUp.s.next)} · ${doseWithUnits(nextUp.c, doseAtIndex(nextUp.c, nextUp.s.nextIdx))}</p>` : '<p>Nothing scheduled.</p>'}</div>`;
 const days = [];
 for (let k = 1; k <= 7; k++){
