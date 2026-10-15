@@ -1,0 +1,16 @@
+{
+  "name": "Peptide Cycle Log",
+  "short_name": "Peptides",
+  "description": "Track peptide cycles, today's doses, titration, and vials.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#dfe6ef",
+  "theme_color": "#dfe6ef",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

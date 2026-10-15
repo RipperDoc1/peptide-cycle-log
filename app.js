@@ -958,7 +958,7 @@ const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectT
 $('siSubmit').disabled = false;
 if (error){ $('siErr').textContent = /rate/i.test(error.message) ? 'Too many sign-in emails just now. Wait a few minutes and try again.' : 'Couldn\'t send the link. Try again.'; return; }
 $('siSent').hidden = false;
-$('siSent').textContent = `Check ${email}. Tap the link once, or type the 6-digit code below. If the link opens inside your email app, use the code instead.`;
+$('siSent').textContent = `${(navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? `Check ${email} and type the 6-digit code below. (Links open in your browser, not in this app.)` : `Check ${email}. Tap the link once, or type the 6-digit code below. If the link opens inside your email app, use the code instead.`}`;
 $('codeField').hidden = false; $('codeActions').hidden = false;
 try { localStorage.setItem('pcl-email', email); } catch {}
 });
