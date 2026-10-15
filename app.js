@@ -538,7 +538,8 @@ const formLen = () => {
 if ($('f-lenunit').value === 'open'){ const st = $('f-start').value; return (st ? Math.max(diff(parse(st), today()), 0) : 0) + OPEN_AHEAD; }
 const v = parseInt($('f-len').value, 10) || 0; return $('f-lenunit').value === 'weeks' ? v * 7 : v;
 };
-function syncLen(){ const o = $('f-lenunit').value === 'open'; $('f-len').hidden = o; $('f-lenunit').classList.toggle('full', o); }
+function syncLen(){ const o = $('f-lenunit').value === 'open'; $('f-len').hidden = o; $('f-lenunit').hidden = o; $('f-open').checked = o; $('openNote').hidden = !o; }
+$('f-open').addEventListener('change', () => { const sel = $('f-lenunit'); sel.value = $('f-open').checked ? 'open' : 'weeks'; if (!$('f-open').checked && !(parseInt($('f-len').value, 10) > 0)) $('f-len').value = 8; sel.dispatchEvent(new Event('change', {bubbles: true})); });
 $('f-lenunit').addEventListener('change', syncLen);
 function rowIdx(s){
 if (s.kind === 'week') return s.week ? (s.week - 1) * 7 : null;

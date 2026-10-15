@@ -92,8 +92,10 @@
 <label class="label" for="f-len">Cycle length</label>
 <div class="inline">
 <input id="f-len" type="number" min="1" step="1" value="8" inputmode="numeric">
-<select id="f-lenunit" aria-label="Cycle length unit"><option value="weeks">wks</option><option value="days">days</option><option value="open">Open-ended</option></select>
+<select id="f-lenunit" aria-label="Cycle length unit"><option value="weeks">wks</option><option value="days">days</option><option value="open" hidden>Open-ended</option></select>
 </div>
+<label class="chk" for="f-open"><input type="checkbox" id="f-open"> Open cycle (no end date)</label>
+<span class="hint" id="openNote" hidden>Runs until you end it with Change cycle.</span>
 </div>
 <div class="field c2">
 <label class="label" for="f-dose" id="doseLabel">Dose</label>
