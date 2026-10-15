@@ -138,6 +138,33 @@ const mg = mgOf(c, dose);
 if (mg == null) return null;
 return mg / (c.vialMg / c.bacMl) * 100;
 }
+// what's left in the vial in use: walks past doses from the cycle start; each logged refill
+// (or a dose that no longer fits) starts a full vial, then looks ahead to when it runs out
+function vialStatus(c){
+if (!(c.vialMg > 0) || !(c.bacMl > 0) || c.dose == null || mgOf(c, 1) == null) return null;
+const sched = schedule(c), days = new Set(c.days), per = c.perDay || 1, t = today(), conc = c.vialMg / c.bacMl;
+const refills = (c.refills || []).map(parse).sort((a, b) => a - b);
+let rem = c.vialMg, opened = parse(c.start), auto = false, ri = 0, i = 0;
+for (; i < sched.length && sched[i] < t; i++){
+const d = sched[i];
+while (ri < refills.length && refills[ri] <= d){ rem = c.vialMg; opened = refills[ri]; auto = false; ri++; }
+if (!days.has(d.getDay())) continue;
+const dv = doseAtIndex(c, i); if (!dv) continue;
+const mg = mgOf(c, dv);
+for (let k = 0; k < per; k++){ if (mg > rem + 1e-9){ rem = c.vialMg; opened = d; auto = true; } rem -= mg; }
+}
+while (ri < refills.length && refills[ri] <= t){ rem = c.vialMg; opened = refills[ri]; auto = false; ri++; }
+let r2 = rem, left = 0, runOut = null;
+outer: for (; i < sched.length; i++){
+const d = sched[i];
+if (!days.has(d.getDay())) continue;
+const dv = doseAtIndex(c, i); if (!dv) continue;
+const mg = mgOf(c, dv);
+for (let k = 0; k < per; k++){ if (mg > r2 + 1e-9){ runOut = d; break outer; } r2 -= mg; left++; }
+}
+rem = Math.max(rem, 0);
+return {rem, pct: rem / c.vialMg, opened, auto, dosesLeft: left, runOut, mlLeft: rem / conc, conc};
+}
 // the other way to read a dose: syringe units for mg/mcg, mg for units, mg + units for mL
 function sec(c, dose){
 const mg = mgOf(c, dose), un = unitsFor(c, dose);
@@ -342,7 +369,8 @@ const alertBox = waiting.length ? `<section class="panel approvals"><div class="
 <div class="tact"><button class="btn" data-tact="approved" data-id="${r.id}">Approve</button><button class="btn ghost" data-tact="paused" data-id="${r.id}">Pause</button></div>
 </div>`).join('')}</div></div></section>` : '';
 list.innerHTML = alertBox + panel('Today', todaySub, todayBody, badge)
-+ panel('Upcoming', 'Your next scheduled doses for the coming week.', upBody);
++ panel('Upcoming', 'Your next scheduled doses for the coming week.', upBody)
++ vialsPanel(withStats.filter(x => x.s.status !== 'complete'), panel);
 return;
 }
 if (view === 'testers'){
@@ -371,6 +399,32 @@ list.innerHTML = panel(titles[view], sub, shown.length
 : view === 'complete'
 ? `<div class="pempty quiet"><h3>No completed cycles yet.</h3></div>`
 : startCta('Set up your protocol', 'Add the peptides you take to build your schedule.'));
+}
+function vialsPanel(rows, panel){
+const items = rows.map(x => ({x, v: vialStatus(x.c)})).filter(r => r.v);
+if (!items.length) return '';
+return panel('Vials', 'What\u2019s left in each vial you\u2019re using. Tap one to log a new vial.', `<div class="vials">${items.map(({x, v}) => {
+const c = x.c, key = 'vial|' + c.id, on = openRows.has(key), pct = Math.round(v.pct * 100);
+const lvl = pct <= 20 ? 'low' : pct <= 50 ? 'mid' : 'ok';
+const mgTxt = `${num(+v.rem.toFixed(2))} of ${num(+c.vialMg.toFixed(2))} mg left`;
+const sub = v.runOut ? `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 new vial ${dayWord(v.runOut)}` : `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 lasts the rest of the cycle`;
+const hist = [`${fmt(parse(c.start))} (start)`, ...(c.refills || []).slice().sort().map(r => `${fmt(parse(r))} <button class="link del" data-act="refill-rm" data-id="${c.id}" data-date="${r}">remove</button>`)];
+return `<div class="vialrow ${lvl}${on ? ' open' : ''}">
+<button type="button" class="vialhead" data-act="row" data-key="${key}" aria-expanded="${on}">
+<span class="vialmeter" aria-hidden="true"><span class="vm-fill" style="height:${pct}%"></span></span>
+<span class="vm-text"><span class="vm-name">${esc(c.name)}<span class="vm-pct">${pct}%</span></span>
+<span class="vm-bar"><span style="width:${pct}%"></span></span>
+<span class="vm-sub">${mgTxt} (${num(+v.mlLeft.toFixed(2))} mL)</span>
+<span class="vm-sub">${sub}</span></span>
+<span class="chev" aria-hidden="true">${on ? '\u25b4' : '\u25be'}</span></button>
+${on ? `<div class="refill">
+<div class="field"><label class="label" for="rf-${c.id}">New vial opened on</label><input id="rf-${c.id}" type="date" value="${iso(today())}"></div>
+<button class="btn" data-act="refill" data-id="${c.id}">Save new vial</button>
+<span class="hint">Current vial ${v.auto ? 'assumed opened' : 'opened'} ${fmt(v.opened)}${v.auto ? ' (when the last one ran out)' : ''}.</span>
+<div class="adjlist"><span class="label">Vials opened</span><div>${hist.join(' \u00b7 ')}</div></div>
+<span class="err" id="rf-err-${c.id}"></span>
+</div>` : ''}
+</div>`; }).join('')}</div>`);
 }
 function crow(x, key){
 const {c, s} = x, on = openRows.has(key);
@@ -855,6 +909,13 @@ return to < p.from ? null : {from: p.from, to};
 await saveCycle({...c, pauses, endedOn: d}, 'cy-err');
 break;
 }
+case 'refill': {
+const d = $('rf-' + c.id).value;
+if (!d) { $('rf-err-' + c.id).textContent = 'Pick the date you opened the new vial.'; break; }
+await saveCycle({...c, refills: [...new Set([...(c.refills || []), d])].sort()}, 'rf-err-' + c.id);
+break;
+}
+case 'refill-rm': await saveCycle({...c, refills: (c.refills || []).filter(r => r !== b.dataset.date)}, 'err'); break;
 case 'cy-reopen': await saveCycle({...c, endedOn: null}, 'cy-err'); break;
 case 'pause-rm': {
 const i = +b.dataset.i;

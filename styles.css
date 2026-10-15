@@ -256,3 +256,20 @@ h1{font-size:2.1rem}
 .panel.approvals .upday{border-bottom-color:rgba(0,0,0,.06)}
 .chk{display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--ink);cursor:pointer;margin-top:2px}
 .chk input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:0 0 auto}
+.vials{display:flex;flex-direction:column;gap:10px}
+.vialrow{border:1px solid var(--line);border-radius:var(--r-md);background:var(--sunken);overflow:hidden}
+.vialhead{width:100%;display:flex;align-items:center;gap:14px;background:none;border:none;padding:12px 14px;text-align:left;color:var(--ink);font:inherit}
+.vialmeter{position:relative;width:24px;height:42px;border:2px solid var(--accent);border-radius:5px 5px 9px 9px;overflow:hidden;flex:0 0 auto;background:var(--surface);margin-top:6px}
+.vialmeter::before{content:"";position:absolute;top:-8px;left:3px;right:3px;height:6px;background:var(--accent);border-radius:2px}
+.vm-fill{position:absolute;left:0;right:0;bottom:0;background:var(--ok);transition:height .4s ease}
+.vialrow.mid .vm-fill,.vialrow.mid .vm-bar span{background:var(--warn)}
+.vialrow.low .vm-fill,.vialrow.low .vm-bar span{background:var(--danger)}
+.vm-text{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.vm-name{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.vm-pct{font-weight:600;color:var(--muted)}
+.vm-bar{height:8px;background:var(--surface);border-radius:999px;overflow:hidden}
+.vm-bar span{display:block;height:100%;background:var(--ok);border-radius:999px}
+.vm-sub{font-size:.85rem;color:var(--muted)}
+.refill{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:4px 14px 14px;border-top:1px solid var(--line)}
+.refill .field{width:100%;margin-top:10px}
+.refill input{background:var(--surface)}
