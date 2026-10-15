@@ -469,20 +469,19 @@ return `<article class="cyc ${s.status}">
 <span class="pill ${s.status}">${s.status}</span>
 </div>
 ${todayBlock(c, s)}
-<div class="grid">
+<div class="prog">
+${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="fill" style="width:${pct}%"></div></div>`}
+<div class="progtext"><span>${progL}</span><span>${progR}</span></div>
+</div>
+${cycId === c.id ? cyclePanel(c, s) : ''}
+${adjForm}
+${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
 <div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span><div class="wk">${wk}</div></div>
 </div>
-<div class="prog">
-${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="fill" style="width:${pct}%"></div></div>`}
-<div class="progtext"><span>${progL}</span><span>${progR}</span></div>
-</div>
-${lifeLine}
-${cycId === c.id ? cyclePanel(c, s) : ''}
-${adjForm}
-${open ? detailsBlock(c, s) : ''}
+${lifeLine}</div>` + detailsBlock(c, s) : ''}
 <div class="foot"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button>${acts}</div>
 </div>
 </article>`;
