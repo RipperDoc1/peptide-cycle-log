@@ -407,7 +407,7 @@ ${open ? detailsBlock(c, s) : ''}
 }
 function esc(s){ return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 function resetForm(){
-editingId = null;
+editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
 $('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg';
@@ -709,15 +709,17 @@ el.innerHTML = `<span class="label">Vials needed before you start</span>
 <span class="tx">${num(+totalMg.toFixed(3))} mg over ${s.total} dose${s.total === 1 ? '' : 's'} ÷ ${num(v)} mg per vial = ${+s.vials.toFixed(2)} vials${need > s.vials + 1e-9 ? `, rounded up` : ''}</span>${lifeTx}`;
 }
 ['f-vial','f-bac','f-pml','f-pconc'].forEach(id => $(id).addEventListener('input', () => { updateCalc(); previewSteps(); }));
-$('f-dose').addEventListener('input', () => { unitsFromDose(); updateCalc(); previewSteps(); });
+let doseSource = 'mg';
+$('f-dose').addEventListener('input', () => { doseSource = 'mg'; unitsFromDose(); updateCalc(); previewSteps(); });
 $('f-premix').addEventListener('change', () => { syncPremix(); updateCalc(); updateVials(); });
-$('f-units').addEventListener('input', () => {
+$('f-units').addEventListener('input', () => { doseSource = 'units'; doseFromUnits(); updateCalc(); updateDeltas(); updateVials(); });
+function doseFromUnits(){
 const conc = formVial().conc, unit = $('f-unit').value, v = parseFloat($('f-units').value);
 if (!(conc > 0) || !(v >= 0) || (unit !== 'mg' && unit !== 'mcg')) return;
 const mg = v / 100 * conc;
 $('f-dose').value = +(unit === 'mcg' ? mg * 1000 : mg).toFixed(4);
-updateCalc(); updateDeltas(); updateVials();
-});
+$('unitsEq').textContent = `= ${num(+(unit === 'mcg' ? mg * 1000 : mg).toFixed(4))} ${unit} \u00b7 1 unit = ${num(+(conc / 100 * (unit === 'mcg' ? 1000 : 1)).toFixed(4))} ${unit}`;
+}
 // vial in the form: reconstituted (mg + BAC mL) or premixed (mL x mg/mL); both give total mg and mL
 function formVial(){
 const n = id => { const x = $(id).value.trim(); return x === '' ? null : parseFloat(x); };
@@ -741,7 +743,10 @@ syncUnitsField();
 function syncUnitsField(){
 const conc = formVial().conc, unit = $('f-unit').value, ok = $('f-premix').checked && conc > 0 && (unit === 'mg' || unit === 'mcg');
 $('unitsField').hidden = !ok;
-if (ok){ $('unitsEq').textContent = `1 unit = ${num(+(conc / 100 * (unit === 'mcg' ? 1000 : 1)).toFixed(4))} ${unit}`; if (document.activeElement !== $('f-units')) unitsFromDose(); }
+if (ok){
+if (doseSource === 'units' && $('f-units').value !== '') doseFromUnits();
+else { $('unitsEq').textContent = `1 unit = ${num(+(conc / 100 * (unit === 'mcg' ? 1000 : 1)).toFixed(4))} ${unit}`; if (document.activeElement !== $('f-units')) unitsFromDose(); }
+}
 }
 function unitsFromDose(){
 const conc = formVial().conc, unit = $('f-unit').value, d = parseFloat($('f-dose').value);
