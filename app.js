@@ -231,7 +231,7 @@ ${isOpen(c) && !s.endedEarly ? `
 <div class="kv"><span class="label">Vials needed</span><b>${s.vials != null ? `${Math.ceil(s.vials - 1e-9)} <span class="hint" style="display:inline">(${+s.vials.toFixed(2)} used)</span>` : '—'}</b></div>`}
 <div class="kv"><span class="label">Concentration</span><b>${conc ? num(+conc.toFixed(3)) + ' mg/mL' : '—'}</b></div>
 </div>
-${conc ? `<div class="vial">${num(c.vialMg)} mg vial + ${num(c.bacMl)} mL BAC water</div>` : ''}
+${conc ? `<div class="vial">${c.premixed ? `Premixed: ${num(c.bacMl)} mL vial at ${num(+conc.toFixed(3))} mg/mL (${num(+c.vialMg.toFixed(3))} mg total)` : `${num(c.vialMg)} mg vial + ${num(c.bacMl)} mL BAC water`}</div>` : ''}
 ${stepsHtml}
 ${pausesHtml}
 ${s.endedEarly ? `<div class="vial">${isOpen(c) ? `Ended on ${fmt(parse(c.endedOn))} after ${s.sched.length} days.` : `Ended early on ${fmt(parse(c.endedOn))}, ${s.sched.length} of ${s.lenDays} planned days run.`}</div>` : ''}
@@ -412,7 +412,7 @@ $('form').reset();
 $('f-start').value = iso(today());
 $('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg';
 selDays = new Set([1,2,3,4,5]); renderDays();
-$('f-perday').value = '1'; syncLen();
+$('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
 syncTit(); updateCalc();
 $('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Add cycle';
@@ -424,7 +424,10 @@ $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDa
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
 selDays = new Set(c.days); renderDays();
-$('f-vial').value = c.vialMg ?? ''; $('f-bac').value = c.bacMl ?? '';
+$('f-premix').checked = !!c.premixed;
+if (c.premixed){ $('f-pml').value = c.bacMl ?? ''; $('f-pconc').value = c.vialMg > 0 && c.bacMl > 0 ? +(c.vialMg / c.bacMl).toFixed(6) : ''; $('f-vial').value = ''; $('f-bac').value = ''; }
+else { $('f-vial').value = c.vialMg ?? ''; $('f-bac').value = c.bacMl ?? ''; $('f-pml').value = ''; $('f-pconc').value = ''; }
+syncPremix();
 $('f-tit').checked = !!c.titrate; $('f-perday').value = String(c.perDay || 1);
 {
 const rows = (c.plan||[]).map(p => p.week != null ? {kind: 'week', week: p.week, dose: p.dose}
@@ -455,8 +458,9 @@ if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length mus
 if (!selDays.size) return $('err').textContent = 'Select at least one day of the week.';
 if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
-const vialMg = optNum('f-vial'), bacMl = optNum('f-bac');
-if ((vialMg == null) !== (bacMl == null)) return $('err').textContent = 'Enter both vial size and BAC water, or leave both blank.';
+const fv = formVial(), premixed = $('f-premix').checked;
+if (fv.partial) return $('err').textContent = premixed ? 'Enter both the vial size in mL and the concentration, or leave both blank.' : 'Enter both vial size and BAC water, or leave both blank.';
+const vialMg = fv.mg, bacMl = fv.ml;
 const titrate = $('f-tit').checked;
 let plan = [];
 if (titrate){
@@ -477,7 +481,7 @@ plan.push(r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose
 const existing = editingId && cycles.find(c => c.id === editingId);
 const c = { id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
 name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: [...selDays].sort(),
-dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, vialMg, bacMl,
+dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, vialMg, bacMl, premixed: premixed && vialMg != null,
 titrate, plan,
 pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
 created: existing ? existing.created : Date.now() };
@@ -646,11 +650,12 @@ $('addStep').onclick = () => addRow('week');
 $('addSet').onclick = () => addRow('date');
 ['f-start','f-len','f-lenunit'].forEach(id => $(id).addEventListener('change', () => { if ($('f-tit').checked) renderSteps(); }));
 function updateCalc(){
-const v = parseFloat($('f-vial').value), b = parseFloat($('f-bac').value), d = parseFloat($('f-dose').value);
+const fv = formVial(), v = fv.mg, b = fv.ml, d = parseFloat($('f-dose').value);
+syncUnitsField();
 const unit = $('f-unit').value;
 if (!(v > 0 && b > 0)) { $('calc').innerHTML = ''; return; }
 const conc = v / b;
-const parts = [`Concentration <b>${num(+conc.toFixed(3))} mg/mL</b>`, `${num(+(conc*10).toFixed(4))} mg per 10 u`];
+const parts = [`Concentration <b>${num(+conc.toFixed(3))} mg/mL</b>`, `${num(+(conc/10).toFixed(4))} mg per 10 u`];
 if (d > 0){
 if (unit === 'mg' || unit === 'mcg'){
 const units = (unit === 'mcg' ? d/1000 : d) / conc * 100;
@@ -670,12 +675,12 @@ const plan = titrate ? titSteps.filter(r => r.dose != null && r.dose >= 0 && row
 .map(r => r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose: r.dose}) : [];
 return normalize({start: $('f-start').value, lenValue: parseInt($('f-len').value, 10) || 0, lenUnit: $('f-lenunit').value,
 days: [...selDays], perDay: parseInt($('f-perday').value, 10) || 1, dose: optNum('f-dose'), unit: $('f-unit').value,
-vialMg: optNum('f-vial'), bacMl: optNum('f-bac'), titrate, plan,
+vialMg: formVial().mg, bacMl: formVial().ml, titrate, plan,
 pauses: existing ? existing.pauses : [], endedOn: existing ? existing.endedOn : null});
 }
 function updateVials(){
 const el = $('vialsNeed');
-const v = parseFloat($('f-vial').value), b = parseFloat($('f-bac').value), unit = $('f-unit').value;
+const fv = formVial(), v = fv.mg, b = fv.ml, unit = $('f-unit').value;
 if (!(v > 0 && b > 0)) { el.hidden = true; return; }
 el.hidden = false;
 const c = draftCycle();
@@ -703,7 +708,46 @@ el.innerHTML = `<span class="label">Vials needed before you start</span>
 <div class="vn">${need} vial${need === 1 ? '' : 's'}</div>
 <span class="tx">${num(+totalMg.toFixed(3))} mg over ${s.total} dose${s.total === 1 ? '' : 's'} ÷ ${num(v)} mg per vial = ${+s.vials.toFixed(2)} vials${need > s.vials + 1e-9 ? `, rounded up` : ''}</span>${lifeTx}`;
 }
-['f-vial','f-bac','f-dose'].forEach(id => $(id).addEventListener('input', () => { updateCalc(); previewSteps(); }));
+['f-vial','f-bac','f-pml','f-pconc'].forEach(id => $(id).addEventListener('input', () => { updateCalc(); previewSteps(); }));
+$('f-dose').addEventListener('input', () => { unitsFromDose(); updateCalc(); previewSteps(); });
+$('f-premix').addEventListener('change', () => { syncPremix(); updateCalc(); updateVials(); });
+$('f-units').addEventListener('input', () => {
+const conc = formVial().conc, unit = $('f-unit').value, v = parseFloat($('f-units').value);
+if (!(conc > 0) || !(v >= 0) || (unit !== 'mg' && unit !== 'mcg')) return;
+const mg = v / 100 * conc;
+$('f-dose').value = +(unit === 'mcg' ? mg * 1000 : mg).toFixed(4);
+updateCalc(); updateDeltas(); updateVials();
+});
+// vial in the form: reconstituted (mg + BAC mL) or premixed (mL x mg/mL); both give total mg and mL
+function formVial(){
+const n = id => { const x = $(id).value.trim(); return x === '' ? null : parseFloat(x); };
+if ($('f-premix').checked){
+const ml = n('f-pml'), conc = n('f-pconc');
+if (ml == null && conc == null) return {mg: null, ml: null, conc: null, partial: false};
+if (!(ml > 0) || !(conc > 0)) return {mg: null, ml: null, conc: null, partial: true};
+return {mg: +(ml * conc).toFixed(6), ml, conc, partial: false};
+}
+const mg = n('f-vial'), ml = n('f-bac');
+if (mg == null && ml == null) return {mg: null, ml: null, conc: null, partial: false};
+if (!(mg > 0) || !(ml > 0)) return {mg: null, ml: null, conc: null, partial: true};
+return {mg, ml, conc: mg / ml, partial: false};
+}
+function syncPremix(){
+const p = $('f-premix').checked;
+document.querySelectorAll('#form .recon').forEach(el => el.hidden = p);
+document.querySelectorAll('#form .premix').forEach(el => el.hidden = !p);
+syncUnitsField();
+}
+function syncUnitsField(){
+const conc = formVial().conc, unit = $('f-unit').value, ok = conc > 0 && (unit === 'mg' || unit === 'mcg');
+$('unitsField').hidden = !ok;
+if (ok){ $('unitsEq').textContent = `1 unit = ${num(+(conc / 100 * (unit === 'mcg' ? 1000 : 1)).toFixed(4))} ${unit}`; if (document.activeElement !== $('f-units')) unitsFromDose(); }
+}
+function unitsFromDose(){
+const conc = formVial().conc, unit = $('f-unit').value, d = parseFloat($('f-dose').value);
+if (!(conc > 0) || (unit !== 'mg' && unit !== 'mcg')) return;
+$('f-units').value = d >= 0 ? +((unit === 'mcg' ? d / 1000 : d) / conc * 100).toFixed(2) : '';
+}
 $('f-unit').addEventListener('change', () => { syncTit(); updateCalc(); });
 $('f-tit').addEventListener('change', syncTit);
 $('form').addEventListener('input', updateVials);

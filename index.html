@@ -104,14 +104,28 @@
 <select id="f-perday"><option value="1">Once a day</option><option value="2">2× a day</option><option value="3">3× a day</option><option value="4">4× a day</option></select>
 <span class="hint">The dose above is per injection.</span>
 </div>
-<div class="sect c6"><span class="label">Reconstitution</span><span class="hint">Optional. Fill in to see syringe units for each dose.</span></div>
-<div class="field c3">
+<div class="sect c6"><span class="label">Vial</span><span class="hint">Optional. Fill in to see syringe units and how many vials you need.</span></div>
+<label class="toggle c6 tight" for="f-premix"><input type="checkbox" id="f-premix"> <span><strong>Premixed</strong><span class="hint">Already a liquid, no reconstituting needed.</span></span></label>
+<div class="field c3 recon">
 <label class="label" for="f-vial">Vial size (mg)</label>
 <input id="f-vial" type="number" min="0" step="any" placeholder="5" inputmode="decimal">
 </div>
-<div class="field c3">
+<div class="field c3 recon">
 <label class="label" for="f-bac">BAC water (mL)</label>
 <input id="f-bac" type="number" min="0" step="any" placeholder="2" inputmode="decimal">
+</div>
+<div class="field c3 premix" hidden>
+<label class="label" for="f-pml">Vial size (mL)</label>
+<input id="f-pml" type="number" min="0" step="any" placeholder="10" inputmode="decimal">
+</div>
+<div class="field c3 premix" hidden>
+<label class="label" for="f-pconc">Concentration (mg/mL)</label>
+<input id="f-pconc" type="number" min="0" step="any" placeholder="2.5" inputmode="decimal">
+</div>
+<div class="field c6" id="unitsField" hidden>
+<label class="label" for="f-units">Dose in syringe units (U-100)</label>
+<div class="inline unitsrow"><input id="f-units" type="number" min="0" step="any" inputmode="decimal" placeholder="20"><span class="suffix">units</span><span class="hint" id="unitsEq"></span></div>
+<span class="hint">Type the dose in mg above or in units here. The other one updates.</span>
 </div>
 <div class="calc c6" id="calc" aria-live="polite"></div>
 <div class="vialsneed c6" id="vialsNeed" aria-live="polite" hidden></div>

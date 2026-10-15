@@ -227,3 +227,7 @@ img{max-width:100%}
 .upcard{grid-column:1/-1;margin:2px 0 4px}
 .upcard .cyc .body{padding:14px}
 @media (max-width:560px){.nav .addbtn{position:sticky;right:0;box-shadow:-8px 0 12px var(--surface)}}
+.toggle.tight{border-top:none;padding-top:0}
+.unitsrow{align-items:center;flex-wrap:wrap}
+.unitsrow input{max-width:9em}
+.unitsrow .hint{margin-left:6px}
