@@ -315,7 +315,13 @@ ${items.filter(({c}) => openRows.has('up|' + iso(d) + '|' + c.id)).map(({x}) => 
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 + (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
-list.innerHTML = panel('Today', todaySub, todayBody, badge)
+const waiting = isOwner ? (testers || []).filter(r => r.status === 'pending') : [];
+const alertBox = waiting.length ? `<section class="panel approvals"><div class="phead"><div><h2>${waiting.length === 1 ? '1 person is' : waiting.length + ' people are'} waiting for approval</h2><p>New sign-ups can’t use the app until you approve them.</p></div></div>
+<div class="pbody"><div class="uplist">${waiting.map(r => `<div class="upday" style="grid-template-columns:minmax(0,1fr) auto;align-items:center">
+<div class="d"><b>${esc(r.name)}</b><span class="tg">@${esc(r.telegram || '')}</span><span>Signed up ${fmt(new Date(r.joined))}</span></div>
+<div class="tact"><button class="btn" data-tact="approved" data-id="${r.id}">Approve</button><button class="btn ghost" data-tact="paused" data-id="${r.id}">Pause</button></div>
+</div>`).join('')}</div></div></section>` : '';
+list.innerHTML = alertBox + panel('Today', todaySub, todayBody, badge)
 + panel('Upcoming', 'Your next scheduled doses for the coming week.', upBody);
 return;
 }
@@ -1014,6 +1020,7 @@ editingProfile = true;
 $('ob-name').value = profile.name; $('ob-tg').value = profile.telegram; $('obErr').textContent = '';
 gate(); $('ob-name').focus();
 });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isOwner && phase === 'app') loadTesters(); });
 async function init(){
 resetForm();
 {

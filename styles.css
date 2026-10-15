@@ -250,3 +250,7 @@ h1{font-size:2.1rem}
 .upday .d .tg{color:var(--ink);font-size:.9rem;font-weight:500}
 .btn.dangerfill{background:var(--danger);color:#fff}
 .tact .btn.ghost.del{color:var(--danger);border-color:var(--line)}
+.panel.approvals{border-color:var(--warn);background:var(--warn-soft)}
+.panel.approvals .phead{border-bottom-color:var(--line)}
+.panel.approvals .phead h2{font-size:1.15rem}
+.panel.approvals .upday{border-bottom-color:rgba(0,0,0,.06)}
