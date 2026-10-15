@@ -308,7 +308,7 @@ items.push({c, dv, x: withStats.find(w => w.c === c)});
 if (items.length) days.push({d, items});
 }
 const later = coming.filter(x => diff(t, x.s.start) > 7);
-const upBody = (days.length ? `<div class="uplist">${days.map(({d, items}) => `<div class="upday">
+const upBody = (days.length ? `<div class="uplist bubbles">${days.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
 <div class="upitems">${items.map(({c, dv, x}) => { const key = 'up|' + iso(d) + '|' + c.id, on = openRows.has(key); return `<button type="button" class="upitem uptoggle" data-act="row" data-key="${key}" aria-expanded="${on}"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ' · ' + u(unitsFor(c, dv)) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></span></button>`; }).join('')}</div>
 ${items.filter(({c}) => openRows.has('up|' + iso(d) + '|' + c.id)).map(({x}) => `<div class="upcard">${card(x, false)}</div>`).join('')}
@@ -739,7 +739,7 @@ document.querySelectorAll('#form .premix').forEach(el => el.hidden = !p);
 syncUnitsField();
 }
 function syncUnitsField(){
-const conc = formVial().conc, unit = $('f-unit').value, ok = conc > 0 && (unit === 'mg' || unit === 'mcg');
+const conc = formVial().conc, unit = $('f-unit').value, ok = $('f-premix').checked && conc > 0 && (unit === 'mg' || unit === 'mcg');
 $('unitsField').hidden = !ok;
 if (ok){ $('unitsEq').textContent = `1 unit = ${num(+(conc / 100 * (unit === 'mcg' ? 1000 : 1)).toFixed(4))} ${unit}`; if (document.activeElement !== $('f-units')) unitsFromDose(); }
 }
