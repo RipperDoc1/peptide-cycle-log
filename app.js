@@ -357,8 +357,7 @@ if (items.length) days.push({d, items});
 const later = coming.filter(x => diff(t, x.s.start) > 7);
 const upBody = (days.length ? `<div class="uplist bubbles">${days.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv, x}) => { const key = 'up|' + iso(d) + '|' + c.id, on = openRows.has(key); return `<button type="button" class="upitem uptoggle" data-act="row" data-key="${key}" aria-expanded="${on}"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${sec(c, dv) ? ' · ' + sec(c, dv) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></span></button>`; }).join('')}</div>
-${items.filter(({c}) => openRows.has('up|' + iso(d) + '|' + c.id)).map(({x}) => `<div class="upcard">${card(x, false)}</div>`).join('')}
+<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${sec(c, dv) ? ' \u00b7 ' + sec(c, dv) : ''}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</span></div>`).join('')}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 + (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
