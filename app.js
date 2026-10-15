@@ -15,6 +15,7 @@ let profile = null, loaded = false, editingProfile = false;
 let isOwner = false, testers = null, rosterSync = null;
 const LS_PROFILE = 'peptide-profile-v1';
 const collapsed = new Set();   // cards on the Today view with details folded away
+const openRows = new Set();    // collapsed rows the viewer has expanded
 let selDays = new Set([1,2,3,4,5]);
 let store = null;       // {save(c), remove(id)}
 const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
@@ -286,13 +287,14 @@ const running = withStats.filter(x => x.s.status === 'active' || x.s.status === 
 const coming = withStats.filter(x => x.s.status === 'upcoming');
 const due = running.filter(x => x.s.doseToday != null);
 const inj = due.reduce((n, x) => n + (x.c.perDay || 1), 0);
-const todaySub = !running.length ? 'Your daily doses appear here.'
+const todaySub = !cycles.length ? 'Your daily doses appear here.'
 : due.length ? `${due.length} peptide${due.length > 1 ? 's' : ''} due today · ${inj} injection${inj > 1 ? 's' : ''}`
-: 'Nothing due today.';
+: 'Your daily doses appear here.';
+const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
 ? startCta('Set up your protocol', 'Add the peptides you take to build your schedule. Today’s doses, progress, and vial counts will show up here.')
-: running.length ? running.map(x => card(x, !collapsed.has(x.c.id))).join('')
-: startCta('No cycles running today', coming.length ? 'Your next cycle is listed under Upcoming.' : 'Add a cycle to build your schedule.');
+: due.length ? due.map(x => card(x, !collapsed.has(x.c.id))).join('')
+: `<div class="pempty quiet"><h3>No dose today</h3>${nextUp ? `<p>Next: ${esc(nextUp.c.name)} ${dayWord(nextUp.s.next)} · ${doseWithUnits(nextUp.c, doseAtIndex(nextUp.c, nextUp.s.nextIdx))}</p>` : '<p>Nothing scheduled.</p>'}</div>`;
 const days = [];
 for (let k = 1; k <= 7; k++){
 const d = addDays(t, k), items = [];
@@ -301,16 +303,18 @@ if (s.status === 'complete') return;
 const i = s.sched.findIndex(x => +x === +d);
 if (i < 0 || !c.days.includes(d.getDay())) return;
 const dv = doseAtIndex(c, i); if (!dv) return;
-items.push({c, dv});
+items.push({c, dv, x: withStats.find(w => w.c === c)});
 });
 if (items.length) days.push({d, items});
 }
 const later = coming.filter(x => diff(t, x.s.start) > 7);
 const upBody = (days.length ? `<div class="uplist">${days.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ' · ' + u(unitsFor(c, dv)) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}</span></div>`).join('')}</div>
+<div class="upitems">${items.map(({c, dv, x}) => { const key = 'up|' + iso(d) + '|' + c.id, on = openRows.has(key); return `<button type="button" class="upitem uptoggle" data-act="row" data-key="${key}" aria-expanded="${on}"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ' · ' + u(unitsFor(c, dv)) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></span></button>`; }).join('')}</div>
+${items.filter(({c}) => openRows.has('up|' + iso(d) + '|' + c.id)).map(({x}) => `<div class="upcard">${card(x, false)}</div>`).join('')}
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
-+ (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '');
++ (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
++ (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
 list.innerHTML = panel('Today', todaySub, todayBody, badge)
 + panel('Upcoming', 'Your next scheduled doses for the coming week.', upBody);
 return;
@@ -335,10 +339,24 @@ const shown = withStats.filter(({s}) => view === 'all' || (view === 'complete' ?
 const subs = {current: 'Active, paused, and upcoming cycles.', complete: 'Cycles that finished or were ended.', all: 'Every cycle you’ve logged.'};
 const sub = `${subs[view]}${shown.length ? ` ${shown.length} cycle${shown.length === 1 ? '' : 's'}.` : ''}`;
 list.innerHTML = panel(titles[view], sub, shown.length
-? shown.map(x => card(x, expanded.has(x.c.id))).join('')
+? `<div class="rows">${shown.map(x => crow(x, view + '|' + x.c.id)).join('')}</div>`
 : view === 'complete'
 ? `<div class="pempty quiet"><h3>No completed cycles yet.</h3></div>`
 : startCta('Set up your protocol', 'Add the peptides you take to build your schedule.'));
+}
+function crow(x, key){
+const {c, s} = x, on = openRows.has(key);
+let line;
+if (s.status === 'paused') line = `Paused since ${fmt(parse(s.openPause.from))}`;
+else if (s.status === 'complete') line = s.endedEarly ? `Ended ${fmt(parse(c.endedOn))}` : `Finished ${fmt(s.end)}`;
+else if (s.status === 'upcoming') line = `Starts ${dayWord(s.start)}`;
+else if (s.doseToday != null) line = `Due today · ${doseWithUnits(c, s.doseToday)}`;
+else if (s.next) line = `Next ${dayWord(s.next)} · ${doseWithUnits(c, doseAtIndex(c, s.nextIdx))}`;
+else line = 'No doses left';
+return `<div class="crow${on ? ' open' : ''}"><button type="button" class="crowhead" data-act="row" data-key="${key}" aria-expanded="${on}">
+<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="cline">${line}</span></span>
+<span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></button>
+${on ? card(x, expanded.has(c.id)) : ''}</div>`;
 }
 function card({c, s}, open){
 const open_ = isOpen(c);
@@ -717,6 +735,7 @@ cycId = null; renderList();
 $('list').addEventListener('click', async e => {
 const b = e.target.closest('[data-act]'); if (!b) return;
 const c = cycles.find(x => x.id === b.dataset.id);
+if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
 case 'det': {
 const homeRunning = view === 'home' && ['active','paused'].includes(stats(c).status);

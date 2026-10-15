@@ -212,3 +212,18 @@ img{max-width:100%}
 #whoami .link + .link{margin-left:12px}
 .tact{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .tact .btn{padding:6px 14px;font-size:.84rem;border-radius:999px}
+.rows{display:flex;flex-direction:column;gap:10px}
+.crow{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
+.crow.open{box-shadow:var(--shadow)}
+.crowhead{width:100%;display:flex;align-items:center;gap:12px;background:none;border:none;padding:14px 16px;text-align:left;color:var(--ink)}
+.crowhead:hover{background:var(--sunken)}
+.cmain{display:flex;flex-direction:column;min-width:0;flex:1}
+.cname{font-weight:600;font-size:1.05rem;overflow-wrap:anywhere}
+.cline{font-size:.88rem;color:var(--muted)}
+.chev{color:var(--muted);font-size:.9rem;margin-left:6px}
+.crow .cyc{border:none;border-top:1px solid var(--line);border-radius:0}
+.uptoggle{width:100%;background:none;border:none;padding:4px 6px;margin:0 -6px;border-radius:8px;color:var(--ink);text-align:left;font:inherit}
+.uptoggle:hover{background:var(--sunken)}
+.upcard{grid-column:1/-1;margin:2px 0 4px}
+.upcard .cyc .body{padding:14px}
+@media (max-width:560px){.nav .addbtn{position:sticky;right:0;box-shadow:-8px 0 12px var(--surface)}}
