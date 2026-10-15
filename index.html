@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Peptide Cycle Log</title>
+<meta name="description" content="Track peptide cycles, today's doses, titration, and vials.">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+<header>
+<div>
+<h1 id="greet">Hello, Tim.</h1>
+<p class="sub"><span id="todayStr"></span><span id="asOf"></span><span id="whoami" hidden></span></p>
+</div>
+<span class="sync" id="sync">Loading…</span>
+</header>
+<section class="panel" id="onboard" hidden>
+<div class="phead"><div><h2 id="obTitle">Welcome</h2><p id="obSub">Before you start, tell us who you are.</p></div></div>
+<form class="pbody obform" id="obForm" novalidate>
+<div class="field">
+<label class="label" for="ob-name">Your name</label>
+<input id="ob-name" autocomplete="given-name" placeholder="e.g. Tim" maxlength="40">
+</div>
+<div class="field">
+<label class="label" for="ob-tg">Telegram username</label>
+<div class="tgwrap"><span aria-hidden="true">@</span><input id="ob-tg" placeholder="username" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="33"></div>
+<span class="hint">5–32 characters: letters, numbers, and underscores.</span>
+</div>
+<p class="hint" id="obPrivacy" style="margin:0">The app owner sees your name to approve access. Your Telegram username and your cycles stay private to you.</p>
+<div class="actions">
+<button class="btn" type="submit" id="obSubmit">Get started</button>
+<button class="btn ghost" type="button" id="obCancel" hidden>Cancel</button>
+<span class="err" id="obErr" role="alert"></span>
+</div>
+</form>
+</section>
+<section class="panel" id="signin" hidden>
+<div class="phead"><div><h2>Sign in</h2><p>Enter your email and we’ll send you a sign-in link. No password needed.</p></div></div>
+<form class="pbody obform" id="siForm" novalidate>
+<div class="field">
+<label class="label" for="si-email">Email</label>
+<input id="si-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+</div>
+<div class="actions"><button class="btn" type="submit" id="siSubmit">Send sign-in link</button><span class="err" id="siErr" role="alert"></span></div>
+<p class="hint" id="siSent" hidden style="margin:0"></p>
+</form>
+</section>
+<section class="panel" id="waiting" hidden>
+<div class="phead"><div><h2 id="waitTitle">Waiting for approval</h2><p id="waitSub"></p></div></div>
+<div class="pbody"><div class="actions"><button class="btn ghost" type="button" id="waitRefresh">Check again</button></div></div>
+</section>
+<div class="loading" id="loading">Loading…</div>
+<nav class="nav" id="nav" aria-label="Views" hidden>
+<button type="button" data-view="home" aria-current="page">Today</button>
+<button type="button" data-view="current">Current</button>
+<button type="button" data-view="complete">Completed</button>
+<button type="button" data-view="all">All</button>
+<button type="button" data-view="testers" id="navTesters" hidden>Testers</button>
+<button type="button" data-view="add" class="addbtn" aria-label="Add cycle">+ Add<span class="full"> cycle</span></button>
+</nav>
+<form class="form" id="form" novalidate hidden>
+<h2 id="formTitle">New cycle</h2>
+<div class="field c6">
+<label class="label" for="f-name">Peptide</label>
+<input id="f-name" list="peptides" placeholder="e.g. BPC-157" autocomplete="off" required>
+<datalist id="peptides"></datalist>
+</div>
+<div class="field c2">
+<label class="label" for="f-start">Start date</label>
+<input id="f-start" type="date" required>
+</div>
+<div class="field c2">
+<label class="label" for="f-len">Cycle length</label>
+<div class="inline">
+<input id="f-len" type="number" min="1" step="1" value="8" inputmode="numeric">
+<select id="f-lenunit" aria-label="Cycle length unit"><option value="weeks">wks</option><option value="days">days</option><option value="open">Open-ended</option></select>
+</div>
+</div>
+<div class="field c2">
+<label class="label" for="f-dose" id="doseLabel">Dose</label>
+<div class="inline">
+<input id="f-dose" type="number" min="0" step="any" placeholder="0.25" inputmode="decimal">
+<select id="f-unit" aria-label="Dose unit"><option>mg</option><option>mcg</option><option>IU</option><option>units</option><option>mL</option></select>
+</div>
+</div>
+<div class="field c6">
+<span class="label" id="daysLabel">Days used</span>
+<div class="days" id="days" role="group" aria-labelledby="daysLabel"></div>
+<div class="quick">
+<button type="button" class="link" data-preset="0,1,2,3,4,5,6">Daily</button>
+<button type="button" class="link" data-preset="1,2,3,4,5">Mon–Fri</button>
+<button type="button" class="link" data-preset="1,3,5">M / W / F</button>
+<button type="button" class="link" data-preset="1,4">Mon / Thu</button>
+<button type="button" class="link" data-preset="1">Weekly (Mon)</button>
+</div>
+</div>
+<div class="field c3">
+<label class="label" for="f-perday">Doses per day</label>
+<select id="f-perday"><option value="1">Once a day</option><option value="2">2× a day</option><option value="3">3× a day</option><option value="4">4× a day</option></select>
+<span class="hint">The dose above is per injection.</span>
+</div>
+<div class="sect c6"><span class="label">Reconstitution</span><span class="hint">Optional. Fill in to see syringe units for each dose.</span></div>
+<div class="field c3">
+<label class="label" for="f-vial">Vial size (mg)</label>
+<input id="f-vial" type="number" min="0" step="any" placeholder="5" inputmode="decimal">
+</div>
+<div class="field c3">
+<label class="label" for="f-bac">BAC water (mL)</label>
+<input id="f-bac" type="number" min="0" step="any" placeholder="2" inputmode="decimal">
+</div>
+<div class="calc c6" id="calc" aria-live="polite"></div>
+<div class="vialsneed c6" id="vialsNeed" aria-live="polite" hidden></div>
+<label class="toggle c6" for="f-tit"><input type="checkbox" id="f-tit"> <span><strong>Titrate dose</strong><span class="hint">One line per dose change. Each line sets the dose from that week or date until the next line.</span></span></label>
+<div class="titbox c6" id="titBox" hidden>
+<div class="steprows" id="stepRows"></div>
+<div class="steppreview" id="stepPreview"></div>
+<div class="quick"><button type="button" class="link" id="addStep">+ Add line by week</button><button type="button" class="link" id="addSet">+ Add line by date</button></div>
+<span class="err" id="titMsg" role="alert"></span>
+</div>
+<div class="actions">
+<button class="btn" type="submit" id="submitBtn">Add cycle</button>
+<button class="btn ghost" type="button" id="cancelBtn" hidden>Cancel</button>
+<span class="err" id="err" role="alert"></span>
+</div>
+</form>
+<section id="listSec" hidden style="display:flex;flex-direction:column;gap:24px">
+<span id="viewTitle" hidden></span><span id="viewSub" hidden></span><span id="count" hidden></span>
+<div class="list" id="list" style="gap:24px"></div>
+</section>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

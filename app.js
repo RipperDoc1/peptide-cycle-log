@@ -1,0 +1,928 @@
+(function(){
+const DAY = ['S','M','T','W','T','F','S'];
+const DAYNAME = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const $ = id => document.getElementById(id);
+const LS_KEY = 'peptide-cycles-v1';
+let cycles = [];        // [{id, name, start, lenValue, lenUnit, days:[], dose, unit, created}]
+let editingId = null;
+let confirmId = null;
+let adjustId = null;
+let cycId = null;              // card with the Change cycle panel open
+const expanded = new Set();    // cards showing detailed info
+let titSteps = [];  // form state: [{week, dir, amt}]
+let view = 'home', prevView = 'home';
+let profile = null, loaded = false, editingProfile = false;
+let isOwner = false, testers = null, rosterSync = null;
+const LS_PROFILE = 'peptide-profile-v1';
+const collapsed = new Set();   // cards on the Today view with details folded away
+let selDays = new Set([1,2,3,4,5]);
+let store = null;       // {save(c), remove(id)}
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const today = () => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
+const diff = (a,b) => Math.round((b - a) / 86400000);
+const fmt = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined});
+const num = n => Number.isInteger(n) ? String(n) : String(+n.toFixed(3));
+const OPEN_AHEAD = 730;
+const isOpen = c => c.lenUnit === 'open';
+const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
+: c.lenUnit === 'weeks' ? c.lenValue * 7 : c.lenValue;
+function vialLife(c, fromIdx){
+if (!(c.vialMg > 0) || !(c.bacMl > 0) || (c.unit !== 'mg' && c.unit !== 'mcg') || c.dose == null) return null;
+const sched = schedule(c), days = new Set(c.days), per = c.perDay || 1;
+if (fromIdx >= sched.length) return null;
+let used = 0, doses = 0, last = null;
+for (let i = Math.max(fromIdx, 0); i < sched.length; i++){
+const d = sched[i];
+if (!days.has(d.getDay())) continue;
+const dv = doseAtIndex(c, i); if (!dv) continue;
+const mg = c.unit === 'mcg' ? dv / 1000 : dv;
+for (let k = 0; k < per; k++){
+if (used + mg > c.vialMg + 1e-9) return {doses, from: sched[fromIdx], last, next: d, outlasts: false};
+used += mg; doses++; last = d;
+}
+}
+return {doses, from: sched[fromIdx], last, next: null, outlasts: true};
+}
+function vialLifeText(c, life, opener){
+if (!life) return '';
+if (!life.doses) return 'One dose is more than a full vial. Check the vial size or dose.';
+const span = life.next ? diff(life.from, life.next) : diff(life.from, life.last) + 1;
+const wks = span / 7;
+const dur = span < 14 ? `${span} day${span === 1 ? '' : 's'}` : `${+wks.toFixed(1)} weeks`;
+return life.outlasts
+? `One vial covers the rest of this cycle (${life.doses} dose${life.doses === 1 ? '' : 's'}).`
+: `One vial lasts about ${dur} (${life.doses} dose${life.doses === 1 ? '' : 's'}). ${opener} next one around ${dayWord(life.next)}.`;
+}
+function normalize(c){
+c = {...c, days: [...(c.days||[])], pauses: [...(c.pauses||[])]};
+if (c.titrate && !c.steps && c.every && c.step && c.dose != null){
+const steps = []; let d = c.dose;
+for (let k = 1; k * c.every * 7 < lenOf(c); k++){
+let nd = d + (c.dir||1) * c.step;
+if (c.limit != null) nd = (c.dir||1) > 0 ? Math.min(nd, c.limit) : Math.max(nd, c.limit);
+if (Math.abs(nd - d) < 1e-9) break;
+steps.push({week: k * c.every + 1, dir: (c.dir||1), amt: +Math.abs(nd - d).toFixed(6)}); d = nd;
+}
+c.steps = steps;
+}
+if (!Array.isArray(c.plan)){
+const ev = [
+...(c.titrate ? (c.steps||[]) : []).map(x => ({i: (x.week - 1) * 7, rel: true, v: x.dir * x.amt, week: x.week})),
+...(c.changes||[]).map(x => ({i: idxOfDate(c, parse(x.date)), rel: false, v: x.dose, date: x.date})),
+].sort((a,b) => a.i - b.i || b.rel - a.rel);
+let d = c.dose ?? 0; const plan = [];
+for (const e of ev){
+d = Math.max(+(e.rel ? d + e.v : e.v).toFixed(6), 0);
+const entry = e.week != null ? {week: e.week, dose: d, _i: e.i} : {date: e.date, dose: d, _i: e.i};
+if (plan.length && plan[plan.length - 1]._i === e.i) plan[plan.length - 1] = entry; else plan.push(entry);
+}
+c.plan = plan.map(({_i, ...r}) => r);
+if (c.plan.length) c.titrate = true;
+}
+c.plan = c.titrate ? c.plan.map(x => ({...x})) : [];
+delete c.steps; delete c.changes;
+delete c.every; delete c.step; delete c.limit; delete c.dir;
+return c;
+}
+const schedCache = new WeakMap();
+function schedule(c){
+if (schedCache.has(c)) return schedCache.get(c);
+const start = parse(c.start), lenDays = lenOf(c), t = today();
+const pauses = (c.pauses||[]).map(p => ({from: parse(p.from), to: p.to ? parse(p.to) : t}));
+const endOn = c.endedOn ? parse(c.endedOn) : null;
+const out = [];
+for (let d = start, g = 0; out.length < lenDays && g < 5000; d = addDays(d, 1), g++){
+if (endOn && d >= endOn) break;
+if (pauses.some(p => d >= p.from && d <= p.to)) continue;
+out.push(d);
+}
+schedCache.set(c, out); return out;
+}
+function idxOfDate(c, date){
+const s = schedule(c), k = s.findIndex(d => d >= date);
+return k < 0 ? lenOf(c) : k;
+}
+const evCache = new WeakMap();
+function events(c){
+if (evCache.has(c)) return evCache.get(c);
+const ev = [
+...(c.titrate ? (c.plan||[]) : []).map(p => ({i: planIdx(c, p), set: true, v: p.dose, dated: !!p.date})),
+].sort((a,b) => a.i - b.i);
+evCache.set(c, ev); return ev;
+}
+function doseAtIndex(c, i){
+if (c.dose == null) return null;
+let d = c.dose;
+for (const e of events(c)){ if (e.i > i) break; d = e.set ? e.v : d + e.v; }
+return Math.max(+d.toFixed(6), 0);
+}
+const planIdx = (c, p) => p.week != null ? (p.week - 1) * 7 : idxOfDate(c, parse(p.date));
+const isAdjustedAt = (c, i) => events(c).some(e => e.dated && Math.max(e.i,0) === i);
+function unitsFor(c, dose){
+if (dose == null || !(c.vialMg > 0) || !(c.bacMl > 0)) return null;
+const mg = c.unit === 'mcg' ? dose / 1000 : c.unit === 'mg' ? dose : null;
+if (mg == null) return null;
+return mg / (c.vialMg / c.bacMl) * 100;
+}
+const u = n => n == null ? '' : `${+n.toFixed(1)} u`;
+function stats(c){
+const lenDays = lenOf(c), sched = schedule(c), t = today();
+const start = parse(c.start);
+const end = sched.length ? sched[sched.length - 1] : start;
+const days = new Set(c.days), per = c.perDay || 1;
+let total = 0, done = 0, next = null, nextIdx = 0, elapsed = 0, doseToday = null;
+let totalAmt = c.dose != null ? 0 : null, takenAmt = 0;
+sched.forEach((d, i) => {
+if (d <= t) elapsed = i + 1;
+if (!days.has(d.getDay())) return;
+const dv = doseAtIndex(c, i);
+if (dv === 0) return;
+total += per;
+if (totalAmt != null) totalAmt += dv * per;
+if (d < t) { done += per; if (dv != null) takenAmt += dv * per; }
+else {
+if (!next) { next = d; nextIdx = i; }
+if (+d === +t) doseToday = dv;
+}
+});
+const openPause = (c.pauses||[]).find(p => !p.to && parse(p.from) <= t);
+const endedEarly = !!c.endedOn && t >= parse(c.endedOn);
+const status = openPause ? 'paused'
+: endedEarly ? 'complete'
+: t < start ? 'upcoming'
+: t > end ? 'complete' : 'active';
+const span = Math.max(sched.length, 1);
+const curIdx = status === 'upcoming' ? 0 : Math.min(Math.max(elapsed - 1, 0), span - 1);
+const curDose = doseAtIndex(c, curIdx);
+const pausedDays = (c.pauses||[]).reduce((n, p) => {
+const a = parse(p.from), b = p.to ? parse(p.to) : t;
+return n + Math.max(diff(a, b) + 1, 0);
+}, 0);
+const steps = [];
+if (c.dose != null){
+for (let i = 0; i < sched.length; i++){
+const dv = doseAtIndex(c, i), last = steps[steps.length - 1];
+if (last && last.dose === dv) last.to = i;
+else steps.push({from: i, to: i, dose: dv, adjusted: isAdjustedAt(c, i)});
+}
+}
+return { lenDays, span, sched, start, end, total, done, next, nextIdx, status, elapsed, curIdx, curDose,
+doseToday, openPause, endedEarly, pausedDays, steps,
+remaining: Math.max(sched.length - elapsed, 0),
+perWeek: c.days.length * per,
+weeklyAmt: curDose != null ? curDose * c.days.length * per : null,
+totalAmt,
+totalTaken: c.dose != null ? takenAmt : null,
+vialsTaken: c.dose != null && c.vialMg > 0 && (c.unit === 'mg' || c.unit === 'mcg') ? (c.unit === 'mcg' ? takenAmt / 1000 : takenAmt) / c.vialMg : null,
+vials: totalAmt != null && c.vialMg > 0 && (c.unit === 'mg' || c.unit === 'mcg')
+? (c.unit === 'mcg' ? totalAmt / 1000 : totalAmt) / c.vialMg : null };
+}
+function renderDays(){
+$('days').innerHTML = '';
+[1,2,3,4,5,6,0].forEach(i => {
+const b = document.createElement('button');
+b.type = 'button'; b.className = 'day'; b.textContent = DAYNAME[i];
+b.setAttribute('aria-pressed', selDays.has(i));
+b.onclick = () => { selDays.has(i) ? selDays.delete(i) : selDays.add(i); renderDays(); };
+$('days').appendChild(b);
+});
+}
+const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
+const doseWithUnits = (c, dv) => `${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ` (${u(unitsFor(c, dv))})` : ''}`;
+function todayBlock(c, s){
+const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} injections</span>` : '';
+if (s.status === 'paused')
+return `<div class="today paused"><span class="label">Paused</span><div class="big">Paused since ${fmt(parse(s.openPause.from))}</div><span class="tx">No doses until you resume. Use Change cycle to resume.</span></div>`;
+if (s.status === 'complete')
+return `<div class="today done"><span class="label">${s.endedEarly ? 'Ended early' : 'Finished'}</span><div class="big">${s.endedEarly ? 'Ended ' + fmt(parse(c.endedOn)) : 'Finished ' + fmt(s.end)}</div>${s.curDose != null ? `<span class="tx">Last dose level ${num(s.curDose)} ${c.unit}</span>` : ''}</div>`;
+if (s.status === 'upcoming'){
+const fd = doseAtIndex(c, s.nextIdx);
+return `<div class="today"><span class="label">Starts ${dayWord(s.start)}</span><div class="big">${fd != null ? num(fd) + ' ' + c.unit : 'Dose not set'}${fd != null && unitsFor(c, fd) != null ? ` <span class="bu">${u(unitsFor(c, fd))}</span>` : ''}</div>${x}<span class="tx">First dose ${s.next ? dayWord(s.next) : '—'}</span></div>`;
+}
+if (s.doseToday != null){
+const un = unitsFor(c, s.doseToday);
+return `<div class="today on"><span class="label">Dose today</span><div class="big">${num(s.doseToday)} ${c.unit}${un != null ? ` <span class="bu">${u(un)}</span>` : ''}</div>${x}</div>`;
+}
+const nd = s.next ? doseAtIndex(c, s.nextIdx) : null;
+return `<div class="today off"><span class="label">Dose today</span><div class="big">No dose today</div><span class="tx">${s.next ? `Next ${dayWord(s.next)}${nd != null ? ' · ' + doseWithUnits(c, nd) : ''}` : 'No doses left in this cycle'}</span></div>`;
+}
+function detailsBlock(c, s){
+const weekRange = (a, b) => { const wa = Math.floor(a/7)+1, wb = Math.floor(b/7)+1; return wa === wb ? `Wk ${wa}` : `Wk ${wa}–${wb}`; };
+const conc = c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
+const stepsHtml = s.steps.length > 1 ? `<div class="kv"><span class="label">Titration schedule</span>
+<div class="steps">${s.steps.map(st => `<div class="${s.status==='active' && s.curIdx>=st.from && s.curIdx<=st.to ? 'now':''}"><span>${weekRange(st.from, st.to)}<span class="hint" style="display:inline;margin-left:6px">${fmt(s.sched[st.from])}</span></span><span>${num(st.dose)} ${c.unit}${st.adjusted ? '<span class="tag">changed</span>' : ''}</span><span>${u(unitsFor(c, st.dose))}</span></div>`).join('')}</div></div>` : '';
+const pausesHtml = (c.pauses||[]).length ? `<div class="adjlist"><span class="label">Pauses · ${s.pausedDays} day${s.pausedDays === 1 ? '' : 's'} total</span>${c.pauses.map((p, i) => `<div><span>${fmt(parse(p.from))} – ${p.to ? fmt(parse(p.to)) : 'now'}</span><button class="link del" data-act="pause-rm" data-id="${c.id}" data-i="${i}">Remove</button></div>`).join('')}</div>` : '';
+return `<div class="details">
+<div class="grid">
+<div class="kv"><span class="label">Dose / injection</span><b>${s.curDose != null ? doseWithUnits(c, s.curDose) : '—'}</b></div>
+<div class="kv"><span class="label">Doses / wk</span><b>${s.perWeek}</b></div>
+<div class="kv"><span class="label">Per week</span><b>${s.weeklyAmt != null ? num(+s.weeklyAmt.toFixed(3)) + ' ' + c.unit : '—'}</b></div>
+${isOpen(c) && !s.endedEarly ? `
+<div class="kv"><span class="label">Doses taken</span><b>${s.done}</b></div>
+<div class="kv"><span class="label">Taken so far</span><b>${s.totalTaken != null ? num(+s.totalTaken.toFixed(3)) + ' ' + c.unit : '—'}</b></div>
+<div class="kv"><span class="label">Vials used so far</span><b>${s.vialsTaken != null ? +s.vialsTaken.toFixed(2) : '—'}</b></div>
+<div class="kv"><span class="label">Per 4 weeks</span><b>${s.weeklyAmt != null ? num(+(s.weeklyAmt * 4).toFixed(3)) + ' ' + c.unit : '—'}</b></div>` : `
+<div class="kv"><span class="label">Doses taken</span><b>${s.done} of ${s.total}</b></div>
+<div class="kv"><span class="label">Total doses</span><b>${s.total}</b></div>
+<div class="kv"><span class="label">Cycle total</span><b>${s.totalAmt != null ? num(+s.totalAmt.toFixed(3)) + ' ' + c.unit : '—'}</b></div>
+<div class="kv"><span class="label">Vials needed</span><b>${s.vials != null ? `${Math.ceil(s.vials - 1e-9)} <span class="hint" style="display:inline">(${+s.vials.toFixed(2)} used)</span>` : '—'}</b></div>`}
+<div class="kv"><span class="label">Concentration</span><b>${conc ? num(+conc.toFixed(3)) + ' mg/mL' : '—'}</b></div>
+</div>
+${conc ? `<div class="vial">${num(c.vialMg)} mg vial + ${num(c.bacMl)} mL BAC water</div>` : ''}
+${stepsHtml}
+${pausesHtml}
+${s.endedEarly ? `<div class="vial">${isOpen(c) ? `Ended on ${fmt(parse(c.endedOn))} after ${s.sched.length} days.` : `Ended early on ${fmt(parse(c.endedOn))}, ${s.sched.length} of ${s.lenDays} planned days run.`}</div>` : ''}
+</div>`;
+}
+function cyclePanel(c, s){
+const t = iso(today());
+let body;
+if (s.status === 'paused'){
+body = `<div class="cyopt"><span class="hint">Paused since ${fmt(parse(s.openPause.from))}. Resuming pushes the end date back by the days paused.</span>
+<div class="field"><label class="label" for="cy-resume">Resume on</label><input id="cy-resume" type="date" value="${t}"></div>
+<button class="btn" data-act="cy-resume" data-id="${c.id}">Resume cycle</button></div>
+<div class="cyopt"><div class="field"><label class="label" for="cy-end">End cycle on</label><input id="cy-end" type="date" value="${t}"></div>
+<button class="btn ghost dangerbtn" data-act="cy-end" data-id="${c.id}">End cycle</button></div>`;
+} else if (s.status === 'complete'){
+body = c.endedOn
+? `<div class="cyopt"><span class="hint">This cycle was ended on ${fmt(parse(c.endedOn))}. Reopening restores the full planned length.</span><button class="btn" data-act="cy-reopen" data-id="${c.id}">Reopen cycle</button></div>`
+: `<div class="cyopt"><span class="hint">This cycle has finished. Edit it to extend the length, or use Repeat to start a new one.</span></div>`;
+} else {
+body = `<div class="cyopt"><div class="field"><label class="label" for="cy-pause">Pause starting</label><input id="cy-pause" type="date" value="${t < c.start ? c.start : t}"></div>
+<button class="btn" data-act="cy-pause" data-id="${c.id}">Pause cycle</button>
+<span class="hint">Paused days don't count. The end date moves back.</span></div>
+<div class="cyopt"><div class="field"><label class="label" for="cy-end">End cycle on</label><input id="cy-end" type="date" value="${t}"></div>
+<button class="btn ghost dangerbtn" data-act="cy-end" data-id="${c.id}">End cycle</button>
+<span class="hint">No doses from this date on.</span></div>`;
+}
+return `<div class="adjust cypanel">${body}<div class="actions"><button class="btn ghost" data-act="cy-cancel">Close</button><span class="err" id="cy-err"></span></div></div>`;
+}
+function renderList(){
+const withStats = cycles.map(c => ({c, s: stats(c)}));
+const order = {active:0, paused:1, upcoming:2, complete:3};
+withStats.sort((a,b) => order[a.s.status]-order[b.s.status]
+|| (a.s.status === 'active' && (b.s.doseToday != null) - (a.s.doseToday != null))
+|| (a.s.status==='complete' ? b.s.end - a.s.end : a.s.start - b.s.start));
+const activeN = withStats.filter(x => x.s.status === 'active').length;
+const pausedN = withStats.filter(x => x.s.status === 'paused').length;
+$('count').textContent = `${activeN} active${pausedN ? ` · ${pausedN} paused` : ''} · ${cycles.length} total`;
+const names = [...new Set(cycles.map(c => c.name))].sort();
+$('peptides').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+const list = $('list');
+const t = today(), now = new Date();
+const h = now.getHours();
+$('greet').textContent = `Good ${h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'}${profile && profile.name ? ', ' + profile.name : ''}.`;
+$('todayStr').textContent = t.toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
+$('asOf').textContent = 'As of ' + now.toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'}).replace(' ', '').toLowerCase();
+const panel = (title, sub, body, badge) => `<section class="panel">
+<div class="phead"><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>${badge || ''}</div>
+<div class="pbody">${body}</div></section>`;
+const startCta = (h3, p) => `<div class="pempty"><h3>${h3}</h3><p>${p}</p><button type="button" class="btn" data-nav="add">Start</button></div>`;
+if (view === 'home'){
+const badge = `<div class="datebadge"><span>${t.toLocaleDateString(undefined, {month: 'short'}).toUpperCase()}</span><b>${t.getDate()}</b></div>`;
+const running = withStats.filter(x => x.s.status === 'active' || x.s.status === 'paused');
+const coming = withStats.filter(x => x.s.status === 'upcoming');
+const due = running.filter(x => x.s.doseToday != null);
+const inj = due.reduce((n, x) => n + (x.c.perDay || 1), 0);
+const todaySub = !running.length ? 'Your daily doses appear here.'
+: due.length ? `${due.length} peptide${due.length > 1 ? 's' : ''} due today · ${inj} injection${inj > 1 ? 's' : ''}`
+: 'Nothing due today.';
+const todayBody = !cycles.length
+? startCta('Set up your protocol', 'Add the peptides you take to build your schedule. Today’s doses, progress, and vial counts will show up here.')
+: running.length ? running.map(x => card(x, !collapsed.has(x.c.id))).join('')
+: startCta('No cycles running today', coming.length ? 'Your next cycle is listed under Upcoming.' : 'Add a cycle to build your schedule.');
+const days = [];
+for (let k = 1; k <= 7; k++){
+const d = addDays(t, k), items = [];
+withStats.forEach(({c, s}) => {
+if (s.status === 'complete') return;
+const i = s.sched.findIndex(x => +x === +d);
+if (i < 0 || !c.days.includes(d.getDay())) return;
+const dv = doseAtIndex(c, i); if (!dv) return;
+items.push({c, dv});
+});
+if (items.length) days.push({d, items});
+}
+const later = coming.filter(x => diff(t, x.s.start) > 7);
+const upBody = (days.length ? `<div class="uplist">${days.map(({d, items}) => `<div class="upday">
+<div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
+<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ' · ' + u(unitsFor(c, dv)) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}</span></div>`).join('')}</div>
+</div>`).join('')}</div>` : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
++ (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '');
+list.innerHTML = panel('Today', todaySub, todayBody, badge)
++ panel('Upcoming', 'Your next scheduled doses for the coming week.', upBody);
+return;
+}
+if (view === 'testers'){
+const rows = (testers || []).slice().sort((a,b) => (b.joined||0) - (a.joined||0));
+const pend = rows.filter(r => r.status === 'pending').length;
+const pillOf = {pending: 'upcoming', approved: 'active', blocked: 'complete'}, word = {pending: 'Waiting', approved: 'Approved', blocked: 'Removed'};
+list.innerHTML = panel('Testers', testers == null ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'person' : 'people'} signed up${pend ? ` · ${pend} waiting for approval` : ''}. Only you can see this list.`,
+rows.length ? `<div class="uplist">${rows.map(r => `<div class="upday" style="grid-template-columns:minmax(0,1fr) auto;align-items:center">
+<div class="d"><b>${esc(r.name || 'Unnamed')}${r.you ? ' <span class="hint" style="display:inline">(you)</span>' : ''}</b><span>Joined ${r.joined ? fmt(new Date(r.joined)) : '—'} · <span class="pill ${pillOf[r.status]}" style="padding:1px 8px">${word[r.status]}</span></span></div>
+<div class="tact">${r.you ? '' : r.status === 'pending'
+? `<button class="btn" data-tact="approved" data-id="${r.id}">Approve</button><button class="btn ghost" data-tact="blocked" data-id="${r.id}">Decline</button>`
+: r.status === 'approved' ? `<button class="btn ghost" data-tact="blocked" data-id="${r.id}">Remove access</button>`
+: `<button class="btn ghost" data-tact="approved" data-id="${r.id}">Restore</button>`}</div>
+</div>`).join('')}</div>`
+: `<div class="pempty quiet"><h3>No testers yet.</h3><p>Send people the link. They sign in with their email, and you approve them here.</p></div>`);
+return;
+}
+const titles = {current: 'Current cycles', complete: 'Completed cycles', all: 'All cycles'};
+const shown = withStats.filter(({s}) => view === 'all' || (view === 'complete' ? s.status === 'complete' : s.status !== 'complete'));
+const subs = {current: 'Active, paused, and upcoming cycles.', complete: 'Cycles that finished or were ended.', all: 'Every cycle you’ve logged.'};
+const sub = `${subs[view]}${shown.length ? ` ${shown.length} cycle${shown.length === 1 ? '' : 's'}.` : ''}`;
+list.innerHTML = panel(titles[view], sub, shown.length
+? shown.map(x => card(x, expanded.has(x.c.id))).join('')
+: view === 'complete'
+? `<div class="pempty quiet"><h3>No completed cycles yet.</h3></div>`
+: startCta('Set up your protocol', 'Add the peptides you take to build your schedule.'));
+}
+function card({c, s}, open){
+const open_ = isOpen(c);
+const pct = open_ ? 0 : Math.round(s.elapsed / s.span * 100);
+const lifeNow = s.status === 'complete' ? null : vialLife(c, s.status === 'upcoming' ? 0 : s.curIdx);
+const lifeLine = lifeNow ? `<div class="vialline"><span class="label">Vial</span><span>${vialLifeText(c, lifeNow, s.status === 'upcoming' ? 'Starting from day 1, open the' : 'If you open one today, open the')}</span></div>` : '';
+const wk = [1,2,3,4,5,6,0].map(i => `<span class="${c.days.includes(i)?'on':''}" title="${DAYNAME[i]}">${DAY[i]}</span>`).join('');
+const progL = s.status === 'upcoming' ? `Starts in ${diff(today(), s.start)} day${diff(today(), s.start) === 1 ? '' : 's'}`
+: open_ ? `Day ${Math.max(s.elapsed, 0)}` : `Day ${Math.max(s.elapsed, 0)} of ${s.span}`;
+const progR = s.status === 'complete' ? (s.endedEarly ? 'Ended early' : 'Complete')
+: open_ ? (s.status === 'paused' ? 'Open-ended · on hold' : 'Open-ended')
+: s.status === 'paused' ? `${s.remaining} day${s.remaining === 1 ? '' : 's'} left · on hold`
+: `${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
+const adjForm = adjustId === c.id ? `<div class="adjust">
+<div class="field"><label class="label" for="a-date">Starting on</label><input id="a-date" type="date" value="${iso(today() < s.start ? s.start : today() > s.end ? s.end : today())}"></div>
+<div class="field"><label class="label" for="a-dose">New dose (${c.unit})</label><input id="a-dose" type="number" min="0" step="any" inputmode="decimal" value="${s.curDose ?? ''}" data-id="${c.id}"></div>
+<span class="hint" id="a-units" style="grid-column:1/-1">${unitsFor(c, s.curDose) != null ? `= ${u(unitsFor(c, s.curDose))} per injection` : ''}</span>
+<div class="actions"><button class="btn" data-act="chg-save" data-id="${c.id}">Save dose change</button><button class="btn ghost" data-act="chg-cancel">Cancel</button><span class="err" id="a-err"></span></div>
+</div>` : '';
+const acts = confirmId === c.id
+? `<span class="confirm">Delete this cycle? <button class="link del" data-act="del-yes" data-id="${c.id}">Delete</button><button class="link" data-act="del-no">Keep</button></span>`
+: `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link" data-act="chg" data-id="${c.id}">Change dose</button>` : ''}<button class="link" data-act="cy" data-id="${c.id}">Change cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit</button><button class="link" data-act="dup" data-id="${c.id}">Repeat</button><button class="link del" data-act="del" data-id="${c.id}">Delete</button></div>`;
+return `<article class="cyc ${s.status}">
+<div class="band"></div>
+<div class="body">
+<div class="top">
+<div class="name">${esc(c.name)}</div>
+<span class="pill ${s.status}">${s.status}</span>
+</div>
+${todayBlock(c, s)}
+<div class="grid">
+<div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
+<div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
+<div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
+<div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span><div class="wk">${wk}</div></div>
+</div>
+<div class="prog">
+${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="fill" style="width:${pct}%"></div></div>`}
+<div class="progtext"><span>${progL}</span><span>${progR}</span></div>
+</div>
+${lifeLine}
+${cycId === c.id ? cyclePanel(c, s) : ''}
+${adjForm}
+${open ? detailsBlock(c, s) : ''}
+<div class="foot"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button>${acts}</div>
+</div>
+</article>`;
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function resetForm(){
+editingId = null;
+$('form').reset();
+$('f-start').value = iso(today());
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg';
+selDays = new Set([1,2,3,4,5]); renderDays();
+$('f-perday').value = '1'; syncLen();
+titSteps = []; renderSteps();
+syncTit(); updateCalc();
+$('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Add cycle';
+$('cancelBtn').hidden = false; $('err').textContent = '';
+}
+function fillForm(c, asNew){
+$('f-name').value = c.name;
+$('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
+$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; syncLen();
+$('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
+selDays = new Set(c.days); renderDays();
+$('f-vial').value = c.vialMg ?? ''; $('f-bac').value = c.bacMl ?? '';
+$('f-tit').checked = !!c.titrate; $('f-perday').value = String(c.perDay || 1);
+{
+const rows = (c.plan||[]).map(p => p.week != null ? {kind: 'week', week: p.week, dose: p.dose}
+: asNew ? {kind: 'week', week: Math.floor(idxOfDate(c, parse(p.date)) / 7) + 1, dose: p.dose}
+: {kind: 'date', date: p.date, dose: p.dose});
+titSteps = asNew ? rows.filter((r, i) => r.week >= 2 && !rows.slice(i + 1).some(x => x.week === r.week)) : rows;
+}
+if (!asNew && titSteps.length) $('f-tit').checked = true;
+renderSteps();
+syncTit(); updateCalc();
+editingId = asNew ? null : c.id;
+$('formTitle').textContent = asNew ? 'Repeat cycle' : 'Edit cycle';
+$('submitBtn').textContent = asNew ? 'Add cycle' : 'Save changes';
+$('cancelBtn').hidden = false; $('err').textContent = '';
+$('f-name').focus({preventScroll:true});
+}
+$('form').addEventListener('submit', async e => {
+e.preventDefault();
+const name = $('f-name').value.trim();
+const start = $('f-start').value;
+const lenValue = parseInt($('f-len').value, 10);
+const doseRaw = $('f-dose').value.trim();
+const dose = doseRaw === '' ? null : parseFloat(doseRaw);
+if (!name) return $('err').textContent = 'Enter the peptide name.';
+if (!start) return $('err').textContent = 'Pick a start date.';
+const openLen = $('f-lenunit').value === 'open';
+if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length must be at least 1.';
+if (!selDays.size) return $('err').textContent = 'Select at least one day of the week.';
+if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
+const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
+const vialMg = optNum('f-vial'), bacMl = optNum('f-bac');
+if ((vialMg == null) !== (bacMl == null)) return $('err').textContent = 'Enter both vial size and BAC water, or leave both blank.';
+const titrate = $('f-tit').checked;
+let plan = [];
+if (titrate){
+if (dose == null) return $('err').textContent = 'Enter a starting dose to titrate from.';
+if (!titSteps.length) return $('err').textContent = 'Add at least one titration line, or turn titration off.';
+const len = formLen();
+let prev = 0;
+for (let i = 0; i < titSteps.length; i++){
+const r = titSteps[i], x = rowIdx(r);
+if (x == null) return $('err').textContent = `Titration line ${i+1} needs a ${r.kind === 'week' ? 'week' : 'date'}.`;
+if (r.dose == null || !(r.dose >= 0)) return $('err').textContent = `Titration line ${i+1} needs a dose.`;
+if (x <= prev) return $('err').textContent = `Titration line ${i+1} must start after line ${i || 'the start'}.`;
+if (x >= len) return $('err').textContent = `Titration line ${i+1} starts after the cycle ends.`;
+prev = x;
+plan.push(r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose: r.dose});
+}
+}
+const existing = editingId && cycles.find(c => c.id === editingId);
+const c = { id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
+name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: [...selDays].sort(),
+dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, vialMg, bacMl,
+titrate, plan,
+pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
+created: existing ? existing.created : Date.now() };
+$('submitBtn').disabled = true;
+try {
+await store.save(c);
+const i = cycles.findIndex(x => x.id === c.id);
+if (i >= 0) cycles[i] = normalize(c); else cycles.push(normalize(c));
+resetForm(); setView(prevView === 'add' ? 'home' : prevView);
+} catch (err) {
+$('err').textContent = err && err.code === 'quota_exceeded'
+? 'Storage is full. Delete some old cycles and try again.'
+: 'Couldn\'t save. Check your connection and try again.';
+} finally { $('submitBtn').disabled = false; }
+});
+$('cancelBtn').onclick = () => { resetForm(); setView(prevView === 'add' ? 'home' : prevView); };
+function syncTit(){
+const on = $('f-tit').checked;
+$('titBox').hidden = !on;
+$('doseLabel').textContent = on ? 'Starting dose' : 'Dose';
+if (on && !titSteps.length) addRow('week', true);
+document.querySelectorAll('.unitEcho').forEach(el => el.textContent = $('f-unit').value);
+updateDeltas();
+}
+const formLen = () => {
+if ($('f-lenunit').value === 'open'){ const st = $('f-start').value; return (st ? Math.max(diff(parse(st), today()), 0) : 0) + OPEN_AHEAD; }
+const v = parseInt($('f-len').value, 10) || 0; return $('f-lenunit').value === 'weeks' ? v * 7 : v;
+};
+function syncLen(){ const o = $('f-lenunit').value === 'open'; $('f-len').hidden = o; $('f-lenunit').classList.toggle('full', o); }
+$('f-lenunit').addEventListener('change', syncLen);
+function rowIdx(s){
+if (s.kind === 'week') return s.week ? (s.week - 1) * 7 : null;
+const st = $('f-start').value;
+return s.date && st ? diff(parse(st), parse(s.date)) : null;
+}
+function bounds(i){
+let lo = 0, hi = formLen();
+for (let k = i - 1; k >= 0; k--){ const x = rowIdx(titSteps[k]); if (x != null){ lo = x; break; } }
+for (let k = i + 1; k < titSteps.length; k++){ const x = rowIdx(titSteps[k]); if (x != null){ hi = x; break; } }
+return {lo, hi};
+}
+function weekRangeFor(i){ const {lo, hi} = bounds(i); return {mn: Math.floor(lo / 7) + 2, mx: Math.ceil(hi / 7)}; }
+function dateRangeFor(i){
+const st = $('f-start').value; if (!st) return null;
+const {lo, hi} = bounds(i);
+return {mn: iso(addDays(parse(st), lo + 1)), mx: iso(addDays(parse(st), hi - 1))};
+}
+function clampRow(i){
+const s = titSteps[i];
+if (s.kind === 'week'){
+const {mn, mx} = weekRangeFor(i);
+if (mx < mn) return 'No full week fits between the lines around this one. Use a date instead.';
+if (!(s.week >= mn && s.week <= mx)){
+s.week = Math.min(Math.max(Math.round(s.week) || mn, mn), mx);
+return mn === mx ? `Only Wk ${mn} fits here.` : `Pick a week from ${mn} to ${mx}. Set to Wk ${s.week}.`;
+}
+} else {
+const r = dateRangeFor(i); if (!r) return 'Set the cycle start date first.';
+if (r.mx < r.mn) return 'No days fit between the lines around this one.';
+if (!s.date || s.date < r.mn || s.date > r.mx){
+s.date = !s.date || s.date < r.mn ? r.mn : r.mx;
+return `Pick a date from ${fmt(parse(r.mn))} to ${fmt(parse(r.mx))}.`;
+}
+}
+return '';
+}
+function prevDose(i){
+for (let k = i - 1; k >= 0; k--) if (titSteps[k].dose != null) return titSteps[k].dose;
+const d0 = parseFloat($('f-dose').value); return d0 >= 0 ? d0 : null;
+}
+function renderSteps(msgs = {}){
+const unit = esc($('f-unit').value);
+const d0 = $('f-dose').value;
+const head = `<div class="steprow head"><span class="stepno">0</span><span class="when">Start · Wk 1</span><span class="arrow">→</span><span class="startdose">${d0 !== '' ? esc(d0) + ' ' + unit : 'set starting dose above'}</span></div>`;
+$('stepRows').innerHTML = head + titSteps.map((s, i) => {
+const wr = weekRangeFor(i), dr = dateRangeFor(i);
+const when = s.kind === 'week'
+? `<input type="number" step="1" inputmode="numeric" data-k="week" min="${wr.mn}" max="${wr.mx}" value="${s.week ?? ''}" aria-label="Line ${i+1} week">`
+: `<input type="date" data-k="date" ${dr ? `min="${dr.mn}" max="${dr.mx}"` : ''} value="${s.date ?? ''}" aria-label="Line ${i+1} date">`;
+return `<div class="steprow" data-i="${i}">
+<span class="stepno">${i + 1}</span>
+<select data-k="kind" aria-label="Line ${i+1} starts by"><option value="week"${s.kind === 'week' ? ' selected' : ''}>Week</option><option value="date"${s.kind === 'date' ? ' selected' : ''}>Date</option></select>
+${when}
+<span class="arrow">→</span>
+<div class="inline dosein"><input type="number" min="0" step="any" inputmode="decimal" data-k="dose" value="${s.dose ?? ''}" placeholder="0.5" aria-label="Line ${i+1} dose"><span class="suffix unitEcho">${unit}</span></div>
+<span class="delta" data-delta="${i}"></span>
+<button type="button" class="link del" data-rm="${i}" aria-label="Delete line ${i+1}">×</button>
+<span class="rowmsg" role="alert">${esc(msgs[i] || '')}</span>
+</div>`;
+}).join('');
+updateDeltas();
+}
+function updateDeltas(){
+const unit = $('f-unit').value;
+titSteps.forEach((s, i) => {
+const el = document.querySelector(`[data-delta="${i}"]`); if (!el) return;
+const p = prevDose(i);
+if (s.dose == null || p == null) { el.textContent = ''; el.className = 'delta'; return; }
+const dlt = +(s.dose - p).toFixed(6);
+el.textContent = dlt === 0 ? 'no change' : `${dlt > 0 ? '+' : '−'}${num(Math.abs(dlt))} ${unit}`;
+el.className = 'delta ' + (dlt > 0 ? 'up' : dlt < 0 ? 'down' : '');
+});
+const sd = document.querySelector('.startdose');
+if (sd) sd.textContent = $('f-dose').value !== '' ? `${$('f-dose').value} ${unit}` : 'set starting dose above';
+previewSteps();
+}
+function previewSteps(){
+const d0 = parseFloat($('f-dose').value), st = $('f-start').value, unit = $('f-unit').value;
+if (!$('f-tit').checked || !(d0 >= 0) || !titSteps.length){ $('stepPreview').textContent = ''; return; }
+const parts = [`Wk 1: ${num(d0)}`];
+titSteps.forEach(s => {
+if (s.dose == null) return;
+if (s.kind === 'week' && s.week) parts.push(`Wk ${s.week}: ${num(s.dose)}`);
+else if (s.kind === 'date' && s.date && st) parts.push(`${fmt(parse(s.date))}: ${num(s.dose)}`);
+});
+$('stepPreview').textContent = parts.join('  →  ') + ' ' + unit;
+}
+function addRow(kind, silent){
+const last = titSteps[titSteps.length - 1];
+const lastIdx = last ? rowIdx(last) : 0;
+if (last && lastIdx == null){ $('titMsg').textContent = 'Finish the last line before adding another.'; return; }
+const len = formLen(), st = $('f-start').value;
+const row = {kind, dose: last ? last.dose : (parseFloat($('f-dose').value) >= 0 ? parseFloat($('f-dose').value) : null)};
+if (kind === 'week'){
+row.week = Math.floor(lastIdx / 7) + 2;
+if ((row.week - 1) * 7 >= len){ if (!silent) $('titMsg').textContent = 'No weeks left in this cycle. Increase the cycle length to add more.'; return; }
+} else {
+if (!st){ $('titMsg').textContent = 'Set the cycle start date first.'; return; }
+const minIdx = Math.max(lastIdx + 1, diff(parse(st), today()));
+if (minIdx >= len){ $('titMsg').textContent = 'No days left in this cycle. Increase the cycle length to add more.'; return; }
+row.date = iso(addDays(parse(st), minIdx));
+}
+$('titMsg').textContent = '';
+titSteps.push(row);
+renderSteps();
+if (!silent){ const ins = $('stepRows').querySelectorAll('[data-k="dose"]'); ins[ins.length - 1].focus(); ins[ins.length - 1].select(); }
+}
+$('stepRows').addEventListener('input', e => {
+const row = e.target.closest('.steprow[data-i]'); if (!row) return;
+if (e.target.dataset.k !== 'dose') return;
+const v = e.target.value;
+titSteps[+row.dataset.i].dose = v === '' ? null : parseFloat(v);
+updateDeltas();
+});
+$('stepRows').addEventListener('change', e => {
+const row = e.target.closest('.steprow[data-i]'); if (!row) return;
+const i = +row.dataset.i, s = titSteps[i], k = e.target.dataset.k, v = e.target.value;
+if (k === 'kind'){
+const idx = rowIdx(s), st = $('f-start').value;
+s.kind = v;
+if (v === 'date') s.date = idx != null && st ? iso(addDays(parse(st), idx)) : null;
+else s.week = idx != null ? Math.floor(idx / 7) + 1 : null;
+} else if (k === 'week') s.week = v === '' ? null : parseInt(v, 10);
+else if (k === 'date') s.date = v || null;
+else return;
+const msg = clampRow(i);
+renderSteps(msg ? {[i]: msg} : {});
+});
+$('stepRows').addEventListener('click', e => {
+const b = e.target.closest('[data-rm]'); if (!b) return;
+titSteps.splice(+b.dataset.rm, 1);
+$('titMsg').textContent = '';
+renderSteps();
+});
+$('addStep').onclick = () => addRow('week');
+$('addSet').onclick = () => addRow('date');
+['f-start','f-len','f-lenunit'].forEach(id => $(id).addEventListener('change', () => { if ($('f-tit').checked) renderSteps(); }));
+function updateCalc(){
+const v = parseFloat($('f-vial').value), b = parseFloat($('f-bac').value), d = parseFloat($('f-dose').value);
+const unit = $('f-unit').value;
+if (!(v > 0 && b > 0)) { $('calc').innerHTML = ''; return; }
+const conc = v / b;
+const parts = [`Concentration <b>${num(+conc.toFixed(3))} mg/mL</b>`, `${num(+(conc*10).toFixed(4))} mg per 10 u`];
+if (d > 0){
+if (unit === 'mg' || unit === 'mcg'){
+const units = (unit === 'mcg' ? d/1000 : d) / conc * 100;
+parts.push(`${num(d)} ${unit} = <b>${+units.toFixed(1)} units</b> on a U-100 syringe`);
+if (units > 100) parts.push('Over 1 mL: use less BAC water or split the dose');
+else parts.push(`~${Math.floor(b*100/units)} doses per vial`);
+} else parts.push('Set the dose unit to mg or mcg to see syringe units');
+}
+$('calc').innerHTML = parts.map(p => `<span>${p}</span>`).join('');
+updateVials();
+}
+function draftCycle(){
+const existing = editingId && cycles.find(c => c.id === editingId);
+const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
+const titrate = $('f-tit').checked;
+const plan = titrate ? titSteps.filter(r => r.dose != null && r.dose >= 0 && rowIdx(r) != null && rowIdx(r) > 0 && rowIdx(r) < formLen())
+.map(r => r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose: r.dose}) : [];
+return normalize({start: $('f-start').value, lenValue: parseInt($('f-len').value, 10) || 0, lenUnit: $('f-lenunit').value,
+days: [...selDays], perDay: parseInt($('f-perday').value, 10) || 1, dose: optNum('f-dose'), unit: $('f-unit').value,
+vialMg: optNum('f-vial'), bacMl: optNum('f-bac'), titrate, plan,
+pauses: existing ? existing.pauses : [], endedOn: existing ? existing.endedOn : null});
+}
+function updateVials(){
+const el = $('vialsNeed');
+const v = parseFloat($('f-vial').value), b = parseFloat($('f-bac').value), unit = $('f-unit').value;
+if (!(v > 0 && b > 0)) { el.hidden = true; return; }
+el.hidden = false;
+const c = draftCycle();
+if (!c.start || !(isOpen(c) || c.lenValue > 0) || !c.days.length || c.dose == null){
+el.innerHTML = `<span class="label">Vials needed</span><div class="vn">—</div><span class="tx">Fill in start date, length, days, and dose to see how many vials to have on hand.</span>`;
+return;
+}
+if (unit !== 'mg' && unit !== 'mcg'){
+el.innerHTML = `<span class="label">Vials needed</span><div class="vn">—</div><span class="tx">Set the dose unit to mg or mcg to count vials.</span>`;
+return;
+}
+const life = vialLife(c, 0);
+const lifeTx = life ? `<span class="tx life">${vialLifeText(c, life, 'Starting on day 1, open the')}</span>` : '';
+if (isOpen(c)){
+if (!life || !life.doses){ el.innerHTML = `<span class="label">How long a vial lasts</span><div class="vn">—</div>${lifeTx}`; return; }
+const span = life.next ? diff(life.from, life.next) : diff(life.from, life.last) + 1;
+el.innerHTML = `<span class="label">How long one vial lasts</span>
+<div class="vn">${span < 14 ? `${span} day${span === 1 ? '' : 's'}` : `${+(span / 7).toFixed(1)} weeks`}</div>
+<span class="tx">${life.doses} dose${life.doses === 1 ? '' : 's'} per ${num(v)} mg vial at this schedule${c.plan.length ? ', following your titration' : ''}. Open the next vial around ${life.next ? fmt(life.next) : '—'}.</span>`;
+return;
+}
+const s = stats(c), need = Math.ceil(s.vials - 1e-9);
+const totalMg = unit === 'mcg' ? s.totalAmt / 1000 : s.totalAmt;
+el.innerHTML = `<span class="label">Vials needed before you start</span>
+<div class="vn">${need} vial${need === 1 ? '' : 's'}</div>
+<span class="tx">${num(+totalMg.toFixed(3))} mg over ${s.total} dose${s.total === 1 ? '' : 's'} ÷ ${num(v)} mg per vial = ${+s.vials.toFixed(2)} vials${need > s.vials + 1e-9 ? `, rounded up` : ''}</span>${lifeTx}`;
+}
+['f-vial','f-bac','f-dose'].forEach(id => $(id).addEventListener('input', () => { updateCalc(); previewSteps(); }));
+$('f-unit').addEventListener('change', () => { syncTit(); updateCalc(); });
+$('f-tit').addEventListener('change', syncTit);
+$('form').addEventListener('input', updateVials);
+$('form').addEventListener('change', updateVials);
+$('form').addEventListener('click', e => { if (e.target.closest('.day,[data-preset],[data-rm],#addStep,#addSet')) setTimeout(updateVials); });
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
+selDays = new Set(b.dataset.preset.split(',').map(Number)); renderDays();
+});
+function setView(v, keepForm){
+if (v === 'add' && view !== 'add') prevView = view;
+if (v === 'add' && !keepForm) resetForm();
+view = v; cycId = null; adjustId = null; confirmId = null;
+document.querySelectorAll('#nav [data-view]').forEach(b => b.toggleAttribute('aria-current', b.dataset.view === v));
+document.querySelectorAll('#nav [aria-current]').forEach(b => b.setAttribute('aria-current', 'page'));
+gate();
+window.scrollTo({top: 0});
+if (v === 'add' && !keepForm) $('f-name').focus({preventScroll: true});
+}
+$('nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
+$('list').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
+async function saveCycle(next, errId){
+next = normalize(next);
+try {
+await store.save(next);
+cycles = cycles.map(x => x.id === next.id ? next : x);
+cycId = null; renderList();
+} catch { const el = $(errId); if (el) el.textContent = 'Couldn\'t save. Try again.'; }
+}
+$('list').addEventListener('click', async e => {
+const b = e.target.closest('[data-act]'); if (!b) return;
+const c = cycles.find(x => x.id === b.dataset.id);
+switch (b.dataset.act){
+case 'det': {
+const homeRunning = view === 'home' && ['active','paused'].includes(stats(c).status);
+const set = homeRunning ? collapsed : expanded;
+set.has(c.id) ? set.delete(c.id) : set.add(c.id); renderList(); break;
+}
+case 'cy': confirmId = null; adjustId = null; cycId = cycId === c.id ? null : c.id; renderList(); break;
+case 'cy-cancel': cycId = null; renderList(); break;
+case 'cy-pause': {
+let from = $('cy-pause').value;
+if (!from) { $('cy-err').textContent = 'Pick the date the pause starts.'; break; }
+if (from < c.start) from = c.start;
+await saveCycle({...c, pauses: [...(c.pauses||[]).filter(p => p.to), {from, to: null}]}, 'cy-err');
+break;
+}
+case 'cy-resume': {
+const r = $('cy-resume').value;
+if (!r) { $('cy-err').textContent = 'Pick the date you resume.'; break; }
+const pauses = (c.pauses||[]).map(p => {
+if (p.to) return p;
+const to = iso(addDays(parse(r), -1));
+return to < p.from ? null : {from: p.from, to};
+}).filter(Boolean);
+await saveCycle({...c, pauses}, 'cy-err');
+break;
+}
+case 'cy-end': {
+const d = $('cy-end').value;
+if (!d) { $('cy-err').textContent = 'Pick the date the cycle ends.'; break; }
+const pauses = (c.pauses||[]).map(p => {
+if (p.to) return p;
+const to = iso(addDays(parse(d), -1));
+return to < p.from ? null : {from: p.from, to};
+}).filter(Boolean);
+await saveCycle({...c, pauses, endedOn: d}, 'cy-err');
+break;
+}
+case 'cy-reopen': await saveCycle({...c, endedOn: null}, 'cy-err'); break;
+case 'pause-rm': {
+const i = +b.dataset.i;
+await saveCycle({...c, pauses: (c.pauses||[]).filter((_, k) => k !== i)}, 'err');
+break;
+}
+case 'chg': confirmId = null; cycId = null; adjustId = c.id; renderList(); { const el = $('a-dose'); if (el){ el.focus(); el.select(); } } break;
+case 'chg-cancel': adjustId = null; renderList(); break;
+case 'chg-save': {
+const date = $('a-date').value, v = $('a-dose').value.trim(), dose = parseFloat(v);
+if (!date) { $('a-err').textContent = 'Pick the date the new dose starts.'; break; }
+if (v === '' || !(dose >= 0)) { $('a-err').textContent = 'Enter the new dose.'; break; }
+const ni = idxOfDate(c, parse(date));
+const plan = [...(c.plan||[]).filter(p => planIdx(c, p) !== ni), {date, dose}].sort((a,b) => planIdx(c, a) - planIdx(c, b));
+const next = {...c, titrate: true, plan};
+delete next.every; delete next.step; delete next.limit; delete next.dir;
+try { await store.save(next); cycles = cycles.map(x => x.id === c.id ? normalize(next) : x); adjustId = null; renderList(); }
+catch { $('a-err').textContent = 'Couldn\'t save. Try again.'; }
+break;
+}
+case 'chg-rm': {
+const next = {...c, changes: (c.changes||[]).filter(x => x.date !== b.dataset.date)};
+delete next.every; delete next.step; delete next.limit; delete next.dir;
+try { await store.save(next); cycles = cycles.map(x => x.id === c.id ? normalize(next) : x); renderList(); }
+catch { $('err').textContent = 'Couldn\'t remove that change. Try again.'; }
+break;
+}
+case 'edit': confirmId = null; adjustId = null; setView('add', true); fillForm(c, false); break;
+case 'dup':  confirmId = null; setView('add', true); fillForm(c, true); break;
+case 'del':  confirmId = c.id; renderList(); break;
+case 'del-no': confirmId = null; renderList(); break;
+case 'del-yes':
+try { await store.remove(c.id); cycles = cycles.filter(x => x.id !== c.id); }
+catch { $('err').textContent = 'Couldn\'t delete. Try again.'; }
+confirmId = null; if (editingId === c.id) resetForm(); renderList(); break;
+}
+});
+$('list').addEventListener('input', e => {
+if (e.target.id !== 'a-dose') return;
+const c = cycles.find(x => x.id === e.target.dataset.id), v = parseFloat(e.target.value);
+const n = c && v >= 0 ? unitsFor(c, v) : null;
+$('a-units').textContent = n != null ? `= ${u(n)} per injection` : '';
+});
+const SB_URL = 'https://ojxscacnyybvtxffbere.supabase.co';
+const SB_KEY = 'sb_publishable_bo2h1xqaDYMqEaFNdQwNKA_dcfA_T9h';
+let sb = null, sessionUser = null, phase = 'loading';
+function gate(){
+$('loading').hidden = phase !== 'loading';
+$('signin').hidden = phase !== 'signin';
+const need = phase === 'profile' || (editingProfile && (phase === 'app' || phase === 'waiting'));
+$('onboard').hidden = !need;
+$('waiting').hidden = phase !== 'waiting' || need;
+const app = phase === 'app' && !need;
+$('nav').hidden = !app;
+$('listSec').hidden = !app || view === 'add';
+$('form').hidden = !app || view !== 'add';
+const out = sessionUser ? `<button type="button" class="link" id="signOut">Sign out</button>` : '';
+if (profile){
+$('whoami').hidden = false;
+$('whoami').innerHTML = `@${esc(profile.telegram)}<button type="button" class="link" id="editProfile">Edit profile</button>${out}`;
+} else if (sessionUser){
+$('whoami').hidden = false; $('whoami').innerHTML = `${esc(sessionUser.email || '')}${out}`;
+} else $('whoami').hidden = true;
+if (need){
+$('obTitle').textContent = profile ? 'Your profile' : 'Welcome';
+$('obSub').textContent = profile ? 'Update your name or Telegram username.' : 'Before you start, tell us who you are.';
+$('obSubmit').textContent = profile ? 'Save' : 'Continue';
+$('obCancel').hidden = !profile;
+}
+if (phase === 'waiting'){
+const blocked = profile && profile.status === 'blocked';
+$('waitTitle').textContent = blocked ? 'Access removed' : 'Waiting for approval';
+$('waitSub').textContent = blocked
+? 'Your access to this app has been removed. Contact the person who shared it with you.'
+: `Thanks${profile ? ', ' + profile.name : ''}. The app owner needs to approve you before you can start. Check back soon.`;
+}
+$('navTesters').hidden = !isOwner;
+const pend = (testers || []).filter(t => t.status === 'pending').length;
+$('navTesters').textContent = pend ? `Testers (${pend})` : 'Testers';
+renderList();
+}
+async function loadAll(){
+phase = 'loading'; gate();
+try {
+const { data: { session } } = await sb.auth.getSession();
+sessionUser = session ? session.user : null;
+if (!sessionUser){ profile = null; cycles = []; isOwner = false; phase = 'signin'; return gate(); }
+const { data: prof, error } = await sb.from('profiles').select('name,telegram,status,is_admin,created_at').eq('id', sessionUser.id).maybeSingle();
+if (error) throw error;
+profile = prof ? {name: prof.name, telegram: prof.telegram, status: prof.status, isAdmin: prof.is_admin, created: Date.parse(prof.created_at)} : null;
+isOwner = !!(profile && profile.isAdmin);
+if (!profile){ phase = 'profile'; return gate(); }
+if (profile.status !== 'approved'){ phase = 'waiting'; return gate(); }
+const { data: rows, error: e2 } = await sb.from('cycles').select('id,data').order('updated_at');
+if (e2) throw e2;
+cycles = (rows || []).map(r => normalize({...r.data, id: r.id}));
+if (isOwner) loadTesters();
+$('sync').textContent = 'Synced to your account';
+phase = 'app'; gate();
+} catch (err) {
+$('loading').hidden = false;
+$('loading').innerHTML = `Couldn't reach the server. <button type="button" class="link" id="retryLoad">Try again</button>`;
+}
+}
+document.addEventListener('click', e => { if (e.target.id === 'retryLoad') loadAll(); });
+store = {
+save: async c => {
+const { error } = await sb.from('cycles').upsert({id: c.id, user_id: sessionUser.id, data: c, updated_at: new Date().toISOString()});
+if (error) throw error;
+},
+remove: async id => { const { error } = await sb.from('cycles').delete().eq('id', id); if (error) throw error; },
+saveProfile: async pr => {
+const q = profile
+? sb.from('profiles').update({name: pr.name, telegram: pr.telegram}).eq('id', sessionUser.id)
+: sb.from('profiles').insert({id: sessionUser.id, name: pr.name, telegram: pr.telegram});
+const { error } = await q; if (error) throw error;
+},
+};
+async function loadTesters(){
+const { data, error } = await sb.from('profiles').select('id,name,status,is_admin,created_at').order('created_at', {ascending: false});
+if (error) return;
+testers = data.map(r => ({id: r.id, name: r.name, status: r.status, joined: Date.parse(r.created_at), you: r.id === sessionUser.id}));
+gate();
+}
+$('list').addEventListener('click', async e => {
+const b = e.target.closest('[data-tact]'); if (!b) return;
+b.disabled = true;
+const { error } = await sb.from('profiles').update({status: b.dataset.tact}).eq('id', b.dataset.id);
+if (error) { b.disabled = false; return; }
+loadTesters();
+});
+$('siForm').addEventListener('submit', async e => {
+e.preventDefault();
+const email = $('si-email').value.trim();
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return $('siErr').textContent = 'Enter a valid email address.';
+$('siErr').textContent = ''; $('siSubmit').disabled = true;
+const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+$('siSubmit').disabled = false;
+if (error){ $('siErr').textContent = /rate/i.test(error.message) ? 'Too many sign-in emails just now. Wait a few minutes and try again.' : 'Couldn\'t send the link. Try again.'; return; }
+$('siSent').hidden = false;
+$('siSent').textContent = `Check ${email} for a sign-in link. Open it on this device to finish signing in.`;
+});
+$('waitRefresh').onclick = () => loadAll();
+$('obForm').addEventListener('submit', async e => {
+e.preventDefault();
+const name = $('ob-name').value.trim();
+const tg = $('ob-tg').value.trim().replace(/^@+/, '');
+if (!name) return $('obErr').textContent = 'Enter your name.';
+if (!/^[A-Za-z0-9_]{5,32}$/.test(tg)) return $('obErr').textContent = 'Telegram usernames are 5–32 characters: letters, numbers, and underscores.';
+$('obErr').textContent = ''; $('obSubmit').disabled = true;
+try { await store.saveProfile({name, telegram: tg}); editingProfile = false; await loadAll(); }
+catch { $('obErr').textContent = 'Couldn\'t save. Check your connection and try again.'; }
+finally { $('obSubmit').disabled = false; }
+});
+$('ob-tg').addEventListener('input', e => { if (e.target.value.startsWith('@')) e.target.value = e.target.value.replace(/^@+/, ''); });
+$('obCancel').onclick = () => { editingProfile = false; gate(); };
+document.querySelector('header').addEventListener('click', async e => {
+if (e.target.id === 'signOut'){ await sb.auth.signOut(); view = 'home'; testers = null; return loadAll(); }
+if (e.target.id !== 'editProfile') return;
+editingProfile = true;
+$('ob-name').value = profile.name; $('ob-tg').value = profile.telegram; $('obErr').textContent = '';
+gate(); $('ob-name').focus();
+});
+async function init(){
+resetForm();
+if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check your connection and refresh.'; return; }
+sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
+sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
+loadAll();
+}
+init();
+})();
