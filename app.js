@@ -322,14 +322,16 @@ return;
 if (view === 'testers'){
 const rows = (testers || []).slice().sort((a,b) => (b.joined||0) - (a.joined||0));
 const pend = rows.filter(r => r.status === 'pending').length;
-const pillOf = {pending: 'upcoming', approved: 'active', blocked: 'complete'}, word = {pending: 'Waiting', approved: 'Approved', blocked: 'Removed'};
+const pillOf = {pending: 'upcoming', approved: 'active', paused: 'paused', blocked: 'complete'}, word = {pending: 'Waiting', approved: 'Approved', paused: 'Paused', blocked: 'Declined'};
 list.innerHTML = panel('Testers', testers == null ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'person' : 'people'} signed up${pend ? ` · ${pend} waiting for approval` : ''}. Only you can see this list.`,
 rows.length ? `<div class="uplist">${rows.map(r => `<div class="upday" style="grid-template-columns:minmax(0,1fr) auto;align-items:center">
-<div class="d"><b>${esc(r.name || 'Unnamed')}${r.you ? ' <span class="hint" style="display:inline">(you)</span>' : ''}</b><span>Joined ${r.joined ? fmt(new Date(r.joined)) : '—'} · <span class="pill ${pillOf[r.status]}" style="padding:1px 8px">${word[r.status]}</span></span></div>
-<div class="tact">${r.you ? '' : r.status === 'pending'
-? `<button class="btn" data-tact="approved" data-id="${r.id}">Approve</button><button class="btn ghost" data-tact="blocked" data-id="${r.id}">Decline</button>`
-: r.status === 'approved' ? `<button class="btn ghost" data-tact="blocked" data-id="${r.id}">Remove access</button>`
-: `<button class="btn ghost" data-tact="approved" data-id="${r.id}">Restore</button>`}</div>
+<div class="d"><b>${esc(r.name || 'Unnamed')}${r.you ? ' <span class="hint" style="display:inline">(you)</span>' : ''}</b><span class="tg">@${esc(r.telegram || '')}</span><span>Joined ${r.joined ? fmt(new Date(r.joined)) : '—'} · <span class="pill ${pillOf[r.status]}" style="padding:1px 8px">${word[r.status]}</span></span></div>
+<div class="tact">${r.you ? '' : delId === r.id
+? `<span class="hint" style="flex-basis:100%;text-align:right">Delete ${esc(r.name)} and all their cycles?</span><button class="btn dangerfill" data-tdel="${r.id}">Delete</button><button class="btn ghost" data-tdelno="1">Keep</button>`
+: (r.status === 'approved'
+? `<button class="btn ghost" data-tact="paused" data-id="${r.id}">Pause</button>`
+: `<button class="btn" data-tact="approved" data-id="${r.id}">${r.status === 'pending' ? 'Approve' : 'Resume'}</button>`)
++ `<button class="btn ghost del" data-tdelask="${r.id}">Delete</button>`}</div>
 </div>`).join('')}</div>`
 : `<div class="pempty quiet"><h3>No testers yet.</h3><p>Send people the link. They sign in with their email, and you approve them here.</p></div>`);
 return;
@@ -868,6 +870,7 @@ $('a-units').textContent = n != null ? `= ${u(n)} per injection` : '';
 const SB_URL = 'https://ojxscacnyybvtxffbere.supabase.co';
 const SB_KEY = 'sb_publishable_bo2h1xqaDYMqEaFNdQwNKA_dcfA_T9h';
 let sb = null, sessionUser = null, phase = 'loading', linkError = '';
+const alertRow = msg => { const el = document.querySelector('#list .phead p'); if (el) el.textContent = msg; };
 function gate(){
 $('loading').hidden = phase !== 'loading';
 $('signin').hidden = phase !== 'signin';
@@ -893,10 +896,11 @@ $('obSubmit').textContent = profile ? 'Save' : 'Continue';
 $('obCancel').hidden = !profile;
 }
 if (phase === 'waiting'){
-const blocked = profile && profile.status === 'blocked';
-$('waitTitle').textContent = blocked ? 'Access removed' : 'Waiting for approval';
+const blocked = profile && profile.status === 'blocked', paused = profile && profile.status === 'paused';
+$('waitTitle').textContent = blocked ? 'Access removed' : paused ? 'Access paused' : 'Waiting for approval';
 $('waitSub').textContent = blocked
 ? 'Your access to this app has been removed. Contact the person who shared it with you.'
+: paused ? 'Your access is paused for now. Your cycles are saved and will be here when it\'s turned back on.'
 : `Thanks${profile ? ', ' + profile.name : ''}. The app owner needs to approve you before you can start. Check back soon.`;
 }
 $('navTesters').hidden = !isOwner;
@@ -942,12 +946,25 @@ const { error } = await q; if (error) throw error;
 },
 };
 async function loadTesters(){
-const { data, error } = await sb.from('profiles').select('id,name,status,is_admin,created_at').order('created_at', {ascending: false});
+const { data, error } = await sb.from('profiles').select('id,name,telegram,status,is_admin,created_at').order('created_at', {ascending: false});
 if (error) return;
-testers = data.map(r => ({id: r.id, name: r.name, status: r.status, joined: Date.parse(r.created_at), you: r.id === sessionUser.id}));
+testers = data.map(r => ({id: r.id, name: r.name, telegram: r.telegram, status: r.status, joined: Date.parse(r.created_at), you: r.id === sessionUser.id}));
 gate();
 }
+let delId = null;
 $('list').addEventListener('click', async e => {
+const ask = e.target.closest('[data-tdelask]'), no = e.target.closest('[data-tdelno]'), yes = e.target.closest('[data-tdel]');
+if (ask){ delId = ask.dataset.tdelask; return renderList(); }
+if (no){ delId = null; return renderList(); }
+if (yes){
+yes.disabled = true;
+const id = yes.dataset.tdel;
+const r1 = await sb.from('cycles').delete().eq('user_id', id);
+const r2 = r1.error ? r1 : await sb.from('profiles').delete().eq('id', id);
+delId = null;
+if (r2.error){ renderList(); alertRow('Couldn\'t delete. Try again.'); return; }
+return loadTesters();
+}
 const b = e.target.closest('[data-tact]'); if (!b) return;
 b.disabled = true;
 const { error } = await sb.from('profiles').update({status: b.dataset.tact}).eq('id', b.dataset.id);
