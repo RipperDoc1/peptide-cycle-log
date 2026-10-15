@@ -957,7 +957,7 @@ const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectT
 $('siSubmit').disabled = false;
 if (error){ $('siErr').textContent = /rate/i.test(error.message) ? 'Too many sign-in emails just now. Wait a few minutes and try again.' : 'Couldn\'t send the link. Try again.'; return; }
 $('siSent').hidden = false;
-$('siSent').textContent = `Check ${email} for a sign-in link. Open it on this device to finish signing in.`;
+$('siSent').textContent = `Check ${email} for a sign-in link. Open it on this device (or the one you want to use) to finish signing in.`;
 });
 $('waitRefresh').onclick = () => loadAll();
 $('obForm').addEventListener('submit', async e => {
@@ -983,7 +983,7 @@ gate(); $('ob-name').focus();
 async function init(){
 resetForm();
 if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check your connection and refresh.'; return; }
-sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' } });
+sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
 }
