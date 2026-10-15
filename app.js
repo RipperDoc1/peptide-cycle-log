@@ -30,7 +30,7 @@ const isOpen = c => c.lenUnit === 'open';
 const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
 : c.lenUnit === 'weeks' ? c.lenValue * 7 : c.lenValue;
 function vialLife(c, fromIdx){
-if (!(c.vialMg > 0) || !(c.bacMl > 0) || (c.unit !== 'mg' && c.unit !== 'mcg') || c.dose == null) return null;
+if (!(c.vialMg > 0) || !(c.bacMl > 0) || c.dose == null || mgOf(c, 1) == null) return null;
 const sched = schedule(c), days = new Set(c.days), per = c.perDay || 1;
 if (fromIdx >= sched.length) return null;
 let used = 0, doses = 0, last = null;
@@ -38,7 +38,7 @@ for (let i = Math.max(fromIdx, 0); i < sched.length; i++){
 const d = sched[i];
 if (!days.has(d.getDay())) continue;
 const dv = doseAtIndex(c, i); if (!dv) continue;
-const mg = c.unit === 'mcg' ? dv / 1000 : dv;
+const mg = mgOf(c, dv);
 for (let k = 0; k < per; k++){
 if (used + mg > c.vialMg + 1e-9) return {doses, from: sched[fromIdx], last, next: d, outlasts: false};
 used += mg; doses++; last = d;
@@ -121,11 +121,31 @@ return Math.max(+d.toFixed(6), 0);
 }
 const planIdx = (c, p) => p.week != null ? (p.week - 1) * 7 : idxOfDate(c, parse(p.date));
 const isAdjustedAt = (c, i) => events(c).some(e => e.dated && Math.max(e.i,0) === i);
+// a dose in its own unit -> mg (needs the vial's concentration for syringe units and mL)
+function mgOf(c, dose){
+if (dose == null) return null;
+if (c.unit === 'mg') return dose;
+if (c.unit === 'mcg') return dose / 1000;
+const conc = c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
+if (!conc) return null;
+if (c.unit === 'units') return dose / 100 * conc;
+if (c.unit === 'mL') return dose * conc;
+return null;
+}
 function unitsFor(c, dose){
 if (dose == null || !(c.vialMg > 0) || !(c.bacMl > 0)) return null;
-const mg = c.unit === 'mcg' ? dose / 1000 : c.unit === 'mg' ? dose : null;
+const mg = mgOf(c, dose);
 if (mg == null) return null;
 return mg / (c.vialMg / c.bacMl) * 100;
+}
+// the other way to read a dose: syringe units for mg/mcg, mg for units, mg + units for mL
+function sec(c, dose){
+const mg = mgOf(c, dose), un = unitsFor(c, dose);
+if (mg == null) return '';
+const mgTxt = `${num(+mg.toFixed(3))} mg`;
+if (c.unit === 'units') return mgTxt;
+if (c.unit === 'mL') return un != null ? `${mgTxt} \u00b7 ${u(un)}` : mgTxt;
+return un != null ? u(un) : '';
 }
 const u = n => n == null ? '' : `${+n.toFixed(1)} u`;
 function stats(c){
@@ -176,9 +196,9 @@ perWeek: c.days.length * per,
 weeklyAmt: curDose != null ? curDose * c.days.length * per : null,
 totalAmt,
 totalTaken: c.dose != null ? takenAmt : null,
-vialsTaken: c.dose != null && c.vialMg > 0 && (c.unit === 'mg' || c.unit === 'mcg') ? (c.unit === 'mcg' ? takenAmt / 1000 : takenAmt) / c.vialMg : null,
-vials: totalAmt != null && c.vialMg > 0 && (c.unit === 'mg' || c.unit === 'mcg')
-? (c.unit === 'mcg' ? totalAmt / 1000 : totalAmt) / c.vialMg : null };
+vialsTaken: c.dose != null && c.vialMg > 0 && mgOf(c, 1) != null ? mgOf(c, takenAmt) / c.vialMg : null,
+vials: totalAmt != null && c.vialMg > 0 && mgOf(c, 1) != null ? mgOf(c, totalAmt) / c.vialMg : null,
+totalMg: totalAmt != null ? mgOf(c, totalAmt) : null };
 }
 function renderDays(){
 $('days').innerHTML = '';
@@ -191,7 +211,7 @@ $('days').appendChild(b);
 });
 }
 const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
-const doseWithUnits = (c, dv) => `${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ` (${u(unitsFor(c, dv))})` : ''}`;
+const doseWithUnits = (c, dv) => `${num(dv)} ${c.unit}${sec(c, dv) ? ` (${sec(c, dv)})` : ''}`;
 function todayBlock(c, s){
 const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} injections</span>` : '';
 if (s.status === 'paused')
@@ -200,11 +220,11 @@ if (s.status === 'complete')
 return `<div class="today done"><span class="label">${s.endedEarly ? 'Ended early' : 'Finished'}</span><div class="big">${s.endedEarly ? 'Ended ' + fmt(parse(c.endedOn)) : 'Finished ' + fmt(s.end)}</div>${s.curDose != null ? `<span class="tx">Last dose level ${num(s.curDose)} ${c.unit}</span>` : ''}</div>`;
 if (s.status === 'upcoming'){
 const fd = doseAtIndex(c, s.nextIdx);
-return `<div class="today"><span class="label">Starts ${dayWord(s.start)}</span><div class="big">${fd != null ? num(fd) + ' ' + c.unit : 'Dose not set'}${fd != null && unitsFor(c, fd) != null ? ` <span class="bu">${u(unitsFor(c, fd))}</span>` : ''}</div>${x}<span class="tx">First dose ${s.next ? dayWord(s.next) : '—'}</span></div>`;
+return `<div class="today"><span class="label">Starts ${dayWord(s.start)}</span><div class="big">${fd != null ? num(fd) + ' ' + c.unit : 'Dose not set'}${fd != null && sec(c, fd) ? ` <span class=\"bu\">${sec(c, fd)}</span>` : ''}</div>${x}<span class="tx">First dose ${s.next ? dayWord(s.next) : '—'}</span></div>`;
 }
 if (s.doseToday != null){
-const un = unitsFor(c, s.doseToday);
-return `<div class="today on"><span class="label">Dose today</span><div class="big">${num(s.doseToday)} ${c.unit}${un != null ? ` <span class="bu">${u(un)}</span>` : ''}</div>${x}</div>`;
+const sx = sec(c, s.doseToday);
+return `<div class="today on"><span class="label">Dose today</span><div class="big">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}</div>${x}</div>`;
 }
 const nd = s.next ? doseAtIndex(c, s.nextIdx) : null;
 return `<div class="today off"><span class="label">Dose today</span><div class="big">No dose today</div><span class="tx">${s.next ? `Next ${dayWord(s.next)}${nd != null ? ' · ' + doseWithUnits(c, nd) : ''}` : 'No doses left in this cycle'}</span></div>`;
@@ -213,21 +233,21 @@ function detailsBlock(c, s){
 const weekRange = (a, b) => { const wa = Math.floor(a/7)+1, wb = Math.floor(b/7)+1; return wa === wb ? `Wk ${wa}` : `Wk ${wa}–${wb}`; };
 const conc = c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
 const stepsHtml = s.steps.length > 1 ? `<div class="kv"><span class="label">Titration schedule</span>
-<div class="steps">${s.steps.map(st => `<div class="${s.status==='active' && s.curIdx>=st.from && s.curIdx<=st.to ? 'now':''}"><span>${weekRange(st.from, st.to)}<span class="hint" style="display:inline;margin-left:6px">${fmt(s.sched[st.from])}</span></span><span>${num(st.dose)} ${c.unit}${st.adjusted ? '<span class="tag">changed</span>' : ''}</span><span>${u(unitsFor(c, st.dose))}</span></div>`).join('')}</div></div>` : '';
+<div class="steps">${s.steps.map(st => `<div class="${s.status==='active' && s.curIdx>=st.from && s.curIdx<=st.to ? 'now':''}"><span>${weekRange(st.from, st.to)}<span class="hint" style="display:inline;margin-left:6px">${fmt(s.sched[st.from])}</span></span><span>${num(st.dose)} ${c.unit}${st.adjusted ? '<span class="tag">changed</span>' : ''}</span><span>${sec(c, st.dose)}</span></div>`).join('')}</div></div>` : '';
 const pausesHtml = (c.pauses||[]).length ? `<div class="adjlist"><span class="label">Pauses · ${s.pausedDays} day${s.pausedDays === 1 ? '' : 's'} total</span>${c.pauses.map((p, i) => `<div><span>${fmt(parse(p.from))} – ${p.to ? fmt(parse(p.to)) : 'now'}</span><button class="link del" data-act="pause-rm" data-id="${c.id}" data-i="${i}">Remove</button></div>`).join('')}</div>` : '';
 return `<div class="details">
 <div class="grid">
 <div class="kv"><span class="label">Dose / injection</span><b>${s.curDose != null ? doseWithUnits(c, s.curDose) : '—'}</b></div>
 <div class="kv"><span class="label">Doses / wk</span><b>${s.perWeek}</b></div>
-<div class="kv"><span class="label">Per week</span><b>${s.weeklyAmt != null ? num(+s.weeklyAmt.toFixed(3)) + ' ' + c.unit : '—'}</b></div>
+<div class="kv"><span class="label">Per week</span><b>${s.weeklyAmt != null ? num(+s.weeklyAmt.toFixed(3)) + ' ' + c.unit : '—'}${(c.unit === 'units' || c.unit === 'mL') && mgOf(c, s.weeklyAmt) != null ? ` (${num(+mgOf(c, s.weeklyAmt).toFixed(3))} mg)` : ''}</b></div>
 ${isOpen(c) && !s.endedEarly ? `
 <div class="kv"><span class="label">Doses taken</span><b>${s.done}</b></div>
-<div class="kv"><span class="label">Taken so far</span><b>${s.totalTaken != null ? num(+s.totalTaken.toFixed(3)) + ' ' + c.unit : '—'}</b></div>
+<div class="kv"><span class="label">Taken so far</span><b>${s.totalTaken != null ? num(+s.totalTaken.toFixed(3)) + ' ' + c.unit : '—'}${(c.unit === 'units' || c.unit === 'mL') && mgOf(c, s.totalTaken) != null ? ` (${num(+mgOf(c, s.totalTaken).toFixed(3))} mg)` : ''}</b></div>
 <div class="kv"><span class="label">Vials used so far</span><b>${s.vialsTaken != null ? +s.vialsTaken.toFixed(2) : '—'}</b></div>
 <div class="kv"><span class="label">Per 4 weeks</span><b>${s.weeklyAmt != null ? num(+(s.weeklyAmt * 4).toFixed(3)) + ' ' + c.unit : '—'}</b></div>` : `
 <div class="kv"><span class="label">Doses taken</span><b>${s.done} of ${s.total}</b></div>
 <div class="kv"><span class="label">Total doses</span><b>${s.total}</b></div>
-<div class="kv"><span class="label">Cycle total</span><b>${s.totalAmt != null ? num(+s.totalAmt.toFixed(3)) + ' ' + c.unit : '—'}</b></div>
+<div class="kv"><span class="label">Cycle total</span><b>${s.totalAmt != null ? num(+s.totalAmt.toFixed(3)) + ' ' + c.unit : '—'}${(c.unit === 'units' || c.unit === 'mL') && mgOf(c, s.totalAmt) != null ? ` (${num(+mgOf(c, s.totalAmt).toFixed(3))} mg)` : ''}</b></div>
 <div class="kv"><span class="label">Vials needed</span><b>${s.vials != null ? `${Math.ceil(s.vials - 1e-9)} <span class="hint" style="display:inline">(${+s.vials.toFixed(2)} used)</span>` : '—'}</b></div>`}
 <div class="kv"><span class="label">Concentration</span><b>${conc ? num(+conc.toFixed(3)) + ' mg/mL' : '—'}</b></div>
 </div>
@@ -310,7 +330,7 @@ if (items.length) days.push({d, items});
 const later = coming.filter(x => diff(t, x.s.start) > 7);
 const upBody = (days.length ? `<div class="uplist bubbles">${days.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv, x}) => { const key = 'up|' + iso(d) + '|' + c.id, on = openRows.has(key); return `<button type="button" class="upitem uptoggle" data-act="row" data-key="${key}" aria-expanded="${on}"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${unitsFor(c, dv) != null ? ' · ' + u(unitsFor(c, dv)) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></span></button>`; }).join('')}</div>
+<div class="upitems">${items.map(({c, dv, x}) => { const key = 'up|' + iso(d) + '|' + c.id, on = openRows.has(key); return `<button type="button" class="upitem uptoggle" data-act="row" data-key="${key}" aria-expanded="${on}"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${sec(c, dv) ? ' · ' + sec(c, dv) : ''}${(c.perDay||1) > 1 ? ' × ' + c.perDay : ''}<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></span></button>`; }).join('')}</div>
 ${items.filter(({c}) => openRows.has('up|' + iso(d) + '|' + c.id)).map(({x}) => `<div class="upcard">${card(x, false)}</div>`).join('')}
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
@@ -381,7 +401,7 @@ const progR = s.status === 'complete' ? (s.endedEarly ? 'Ended early' : 'Complet
 const adjForm = adjustId === c.id ? `<div class="adjust">
 <div class="field"><label class="label" for="a-date">Starting on</label><input id="a-date" type="date" value="${iso(today() < s.start ? s.start : today() > s.end ? s.end : today())}"></div>
 <div class="field"><label class="label" for="a-dose">New dose (${c.unit})</label><input id="a-dose" type="number" min="0" step="any" inputmode="decimal" value="${s.curDose ?? ''}" data-id="${c.id}"></div>
-<span class="hint" id="a-units" style="grid-column:1/-1">${unitsFor(c, s.curDose) != null ? `= ${u(unitsFor(c, s.curDose))} per injection` : ''}</span>
+<span class="hint" id="a-units" style="grid-column:1/-1">${sec(c, s.curDose) ? `= ${sec(c, s.curDose)} per injection` : ''}</span>
 <div class="actions"><button class="btn" data-act="chg-save" data-id="${c.id}">Save dose change</button><button class="btn ghost" data-act="chg-cancel">Cancel</button><span class="err" id="a-err"></span></div>
 </div>` : '';
 const acts = confirmId === c.id
@@ -665,12 +685,16 @@ if (!(v > 0 && b > 0)) { $('calc').innerHTML = ''; return; }
 const conc = v / b;
 const parts = [`Concentration <b>${num(+conc.toFixed(3))} mg/mL</b>`, `${num(+(conc/10).toFixed(4))} mg per 10 u`];
 if (d > 0){
-if (unit === 'mg' || unit === 'mcg'){
+if (unit === 'units' || unit === 'mL'){
+const mg = unit === 'units' ? d / 100 * conc : d * conc;
+parts.push(`${num(d)} ${unit} = <b>${num(+mg.toFixed(3))} mg</b>${unit === 'mL' ? ` (${+(d*100).toFixed(1)} units)` : ''}`);
+parts.push(`~${Math.floor(v / mg)} doses per vial`);
+} else if (unit === 'mg' || unit === 'mcg'){
 const units = (unit === 'mcg' ? d/1000 : d) / conc * 100;
 parts.push(`${num(d)} ${unit} = <b>${+units.toFixed(1)} units</b> on a U-100 syringe`);
 if (units > 100) parts.push('Over 1 mL: use less BAC water or split the dose');
 else parts.push(`~${Math.floor(b*100/units)} doses per vial`);
-} else parts.push('Set the dose unit to mg or mcg to see syringe units');
+} else parts.push('IU doses cannot be converted to mg or syringe units');
 }
 $('calc').innerHTML = parts.map(p => `<span>${p}</span>`).join('');
 updateVials();
@@ -696,8 +720,8 @@ if (!c.start || !(isOpen(c) || c.lenValue > 0) || !c.days.length || c.dose == nu
 el.innerHTML = `<span class="label">Vials needed</span><div class="vn">—</div><span class="tx">Fill in start date, length, days, and dose to see how many vials to have on hand.</span>`;
 return;
 }
-if (unit !== 'mg' && unit !== 'mcg'){
-el.innerHTML = `<span class="label">Vials needed</span><div class="vn">—</div><span class="tx">Set the dose unit to mg or mcg to count vials.</span>`;
+if (mgOf(c, 1) == null){
+el.innerHTML = `<span class="label">Vials needed</span><div class="vn">—</div><span class="tx">IU doses cannot be converted to mg, so vials cannot be counted.</span>`;
 return;
 }
 const life = vialLife(c, 0);
@@ -711,7 +735,7 @@ el.innerHTML = `<span class="label">How long one vial lasts</span>
 return;
 }
 const s = stats(c), need = Math.ceil(s.vials - 1e-9);
-const totalMg = unit === 'mcg' ? s.totalAmt / 1000 : s.totalAmt;
+const totalMg = s.totalMg;
 el.innerHTML = `<span class="label">Vials needed before you start</span>
 <div class="vn">${need} vial${need === 1 ? '' : 's'}</div>
 <span class="tx">${num(+totalMg.toFixed(3))} mg over ${s.total} dose${s.total === 1 ? '' : 's'} ÷ ${num(v)} mg per vial = ${+s.vials.toFixed(2)} vials${need > s.vials + 1e-9 ? `, rounded up` : ''}</span>${lifeTx}`;
@@ -870,8 +894,8 @@ confirmId = null; if (editingId === c.id) resetForm(); renderList(); break;
 $('list').addEventListener('input', e => {
 if (e.target.id !== 'a-dose') return;
 const c = cycles.find(x => x.id === e.target.dataset.id), v = parseFloat(e.target.value);
-const n = c && v >= 0 ? unitsFor(c, v) : null;
-$('a-units').textContent = n != null ? `= ${u(n)} per injection` : '';
+const sx = c && v >= 0 ? sec(c, v) : '';
+$('a-units').textContent = sx ? `= ${sx} per injection` : '';
 });
 const SB_URL = 'https://ojxscacnyybvtxffbere.supabase.co';
 const SB_KEY = 'sb_publishable_bo2h1xqaDYMqEaFNdQwNKA_dcfA_T9h';
