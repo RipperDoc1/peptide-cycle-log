@@ -862,10 +862,11 @@ $('a-units').textContent = n != null ? `= ${u(n)} per injection` : '';
 });
 const SB_URL = 'https://ojxscacnyybvtxffbere.supabase.co';
 const SB_KEY = 'sb_publishable_bo2h1xqaDYMqEaFNdQwNKA_dcfA_T9h';
-let sb = null, sessionUser = null, phase = 'loading';
+let sb = null, sessionUser = null, phase = 'loading', linkError = '';
 function gate(){
 $('loading').hidden = phase !== 'loading';
 $('signin').hidden = phase !== 'signin';
+if (phase === 'signin' && linkError){ $('siErr').textContent = linkError; linkError = ''; }
 const need = phase === 'profile' || (editingProfile && (phase === 'app' || phase === 'waiting'));
 $('onboard').hidden = !need;
 $('waiting').hidden = phase !== 'waiting' || need;
@@ -957,9 +958,20 @@ const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectT
 $('siSubmit').disabled = false;
 if (error){ $('siErr').textContent = /rate/i.test(error.message) ? 'Too many sign-in emails just now. Wait a few minutes and try again.' : 'Couldn\'t send the link. Try again.'; return; }
 $('siSent').hidden = false;
-$('siSent').textContent = `Check ${email} for a sign-in link. Open it on this device (or the one you want to use) to finish signing in.`;
+$('siSent').textContent = `Check ${email}. Tap the link once, or type the 6-digit code below. If the link opens inside your email app, use the code instead.`;
+$('codeField').hidden = false; $('codeActions').hidden = false;
+try { localStorage.setItem('pcl-email', email); } catch {}
 });
 $('waitRefresh').onclick = () => loadAll();
+$('siVerify').onclick = async () => {
+const email = $('si-email').value.trim(), token = $('si-code').value.replace(/\D/g, '');
+if (!email) return $('siErr').textContent = 'Enter your email first.';
+if (token.length !== 6) return $('siErr').textContent = 'Enter the 6-digit code from the email.';
+$('siErr').textContent = ''; $('siVerify').disabled = true;
+const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+$('siVerify').disabled = false;
+if (error) $('siErr').textContent = 'That code didn\'t work. It may have expired or been used. Send a new one.';
+};
 $('obForm').addEventListener('submit', async e => {
 e.preventDefault();
 const name = $('ob-name').value.trim();
@@ -982,6 +994,15 @@ gate(); $('ob-name').focus();
 });
 async function init(){
 resetForm();
+{
+const h = new URLSearchParams(location.hash.slice(1)), q = new URLSearchParams(location.search);
+const ec = h.get('error_code') || q.get('error_code'), ed = h.get('error_description') || q.get('error_description');
+if (ec || ed){
+linkError = ec === 'otp_expired' || /expired|invalid/i.test(ed || '') ? 'That sign-in link has already been used or has expired. Send a new one, or use the code from the newest email.' : `Sign-in didn't finish: ${ed || ec}. Send a new link and try again.`;
+history.replaceState(null, '', location.pathname);
+}
+try { const em = localStorage.getItem('pcl-email'); if (em) $('si-email').value = em; } catch {}
+}
 if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check your connection and refresh.'; return; }
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
