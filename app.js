@@ -958,7 +958,7 @@ const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectT
 $('siSubmit').disabled = false;
 if (error){ $('siErr').textContent = /rate/i.test(error.message) ? 'Too many sign-in emails just now. Wait a few minutes and try again.' : 'Couldn\'t send the link. Try again.'; return; }
 $('siSent').hidden = false;
-$('siSent').textContent = `${(navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? `Check ${email} and type the 6-digit code below. (Links open in your browser, not in this app.)` : `Check ${email}. Tap the link once, or type the 6-digit code below. If the link opens inside your email app, use the code instead.`}`;
+$('siSent').textContent = `${(navigator.standalone || matchMedia('(display-mode: standalone)').matches) ? `Check ${email} and type the code below. (Links open in your browser, not in this app.)` : `Check ${email}. Tap the link once, or type the code below. If the link opens inside your email app, use the code instead.`}`;
 $('codeField').hidden = false; $('codeActions').hidden = false;
 try { localStorage.setItem('pcl-email', email); } catch {}
 });
@@ -966,7 +966,7 @@ $('waitRefresh').onclick = () => loadAll();
 $('siVerify').onclick = async () => {
 const email = $('si-email').value.trim(), token = $('si-code').value.replace(/\D/g, '');
 if (!email) return $('siErr').textContent = 'Enter your email first.';
-if (token.length !== 6) return $('siErr').textContent = 'Enter the 6-digit code from the email.';
+if (token.length < 6 || token.length > 10) return $('siErr').textContent = 'Enter the full code from the email.';
 $('siErr').textContent = ''; $('siVerify').disabled = true;
 const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
 $('siVerify').disabled = false;
