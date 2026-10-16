@@ -18,6 +18,13 @@ const collapsed = new Set();   // cards on the Today view whose details the view
 const openRows = new Set();    // collapsed rows the viewer has expanded
 let selDays = new Set([1,2,3,4,5]);
 let store = null;       // {save(c), remove(id)}
+const offMsg = m => navigator.onLine === false ? 'You\'re offline. Connect to the internet to save changes.' : m;
+// local copy of the last data loaded from the server, so the app opens instantly and works offline (read-only)
+const CACHE_KEY = 'pcl-cache-v1';
+const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } };
+const writeCache = () => { try { if (sessionUser && profile && profile.status === 'approved') localStorage.setItem(CACHE_KEY, JSON.stringify({uid: sessionUser.id, email: sessionUser.email, profile, isOwner, cycles, at: Date.now()})); } catch {} };
+const clearCache = () => { try { localStorage.removeItem(CACHE_KEY); } catch {} };
+const hasAuthToken = () => { try { return Object.keys(localStorage).some(k => /^sb-.*-auth-token$/.test(k)); } catch { return false; } };
 const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
@@ -308,6 +315,7 @@ body = `<div class="cyopt"><div class="field"><label class="label" for="cy-pause
 return `<div class="adjust cypanel">${body}<div class="actions"><button class="btn ghost" data-act="cy-cancel">Close</button><span class="err" id="cy-err"></span></div></div>`;
 }
 function renderList(){
+if (phase === 'app') writeCache();
 const withStats = cycles.map(c => ({c, s: stats(c)}));
 const order = {active:0, paused:1, upcoming:2, complete:3};
 withStats.sort((a,b) => order[a.s.status]-order[b.s.status]
@@ -586,7 +594,7 @@ resetForm(); setView(prevView === 'add' ? 'home' : prevView);
 } catch (err) {
 $('err').textContent = err && err.code === 'quota_exceeded'
 ? 'Storage is full. Delete some old cycles and try again.'
-: 'Couldn\'t save. Check your connection and try again.';
+: offMsg('Couldn\'t save. Check your connection and try again.');
 } finally { $('submitBtn').disabled = false; }
 });
 $('cancelBtn').onclick = () => { resetForm(); setView(prevView === 'add' ? 'home' : prevView); };
@@ -876,7 +884,7 @@ try {
 await store.save(next);
 cycles = cycles.map(x => x.id === next.id ? next : x);
 cycId = null; renderList();
-} catch { const el = $(errId); if (el) el.textContent = 'Couldn\'t save. Try again.'; }
+} catch { const el = $(errId); if (el) el.textContent = offMsg('Couldn\'t save. Try again.'); }
 }
 $('list').addEventListener('click', async e => {
 const b = e.target.closest('[data-act]'); if (!b) return;
@@ -943,14 +951,14 @@ const plan = [...(c.plan||[]).filter(p => planIdx(c, p) !== ni), {date, dose}].s
 const next = {...c, titrate: true, plan};
 delete next.every; delete next.step; delete next.limit; delete next.dir;
 try { await store.save(next); cycles = cycles.map(x => x.id === c.id ? normalize(next) : x); adjustId = null; renderList(); }
-catch { $('a-err').textContent = 'Couldn\'t save. Try again.'; }
+catch { $('a-err').textContent = offMsg('Couldn\'t save. Try again.'); }
 break;
 }
 case 'chg-rm': {
 const next = {...c, changes: (c.changes||[]).filter(x => x.date !== b.dataset.date)};
 delete next.every; delete next.step; delete next.limit; delete next.dir;
 try { await store.save(next); cycles = cycles.map(x => x.id === c.id ? normalize(next) : x); renderList(); }
-catch { $('err').textContent = 'Couldn\'t remove that change. Try again.'; }
+catch { $('err').textContent = offMsg('Couldn\'t remove that change. Try again.'); }
 break;
 }
 case 'edit': confirmId = null; adjustId = null; setView('add', true); fillForm(c, false); break;
@@ -959,7 +967,7 @@ case 'del':  confirmId = c.id; renderList(); break;
 case 'del-no': confirmId = null; renderList(); break;
 case 'del-yes':
 try { await store.remove(c.id); cycles = cycles.filter(x => x.id !== c.id); }
-catch { $('err').textContent = 'Couldn\'t delete. Try again.'; }
+catch { $('err').textContent = offMsg('Couldn\'t delete. Try again.'); }
 confirmId = null; if (editingId === c.id) resetForm(); renderList(); break;
 }
 });
@@ -1011,26 +1019,38 @@ $('navTesters').textContent = pend ? `Testers (${pend})` : 'Testers';
 renderList();
 }
 async function loadAll(){
+const cache = readCache();
+let fromCache = false;
+if (phase !== 'app' && cache && hasAuthToken()){
+sessionUser = {id: cache.uid, email: cache.email}; profile = cache.profile; isOwner = cache.isOwner;
+cycles = (cache.cycles || []).map(normalize); fromCache = true;
+$('sync').textContent = 'Updating…'; phase = 'app'; gate();
+} else if (phase !== 'app'){ phase = 'loading'; gate(); }
+const offline = () => {
+if (phase === 'app'){ $('sync').textContent = 'Offline · showing saved copy'; return; }
 phase = 'loading'; gate();
+$('loading').hidden = false;
+$('loading').innerHTML = `Couldn't reach the server. <button type="button" class="link" id="retryLoad">Try again</button>`;
+};
 try {
-const { data: { session } } = await sb.auth.getSession();
+const { data: { session }, error: se } = await sb.auth.getSession();
+if (!session && se && fromCache) return offline();
 sessionUser = session ? session.user : null;
-if (!sessionUser){ profile = null; cycles = []; isOwner = false; phase = 'signin'; return gate(); }
+if (!sessionUser){ clearCache(); profile = null; cycles = []; isOwner = false; phase = 'signin'; return gate(); }
 const { data: prof, error } = await sb.from('profiles').select('name,telegram,status,is_admin,created_at').eq('id', sessionUser.id).maybeSingle();
 if (error) throw error;
 profile = prof ? {name: prof.name, telegram: prof.telegram, status: prof.status, isAdmin: prof.is_admin, created: Date.parse(prof.created_at)} : null;
 isOwner = !!(profile && profile.isAdmin);
-if (!profile){ phase = 'profile'; return gate(); }
-if (profile.status !== 'approved'){ phase = 'waiting'; return gate(); }
+if (!profile){ clearCache(); phase = 'profile'; return gate(); }
+if (profile.status !== 'approved'){ clearCache(); phase = 'waiting'; return gate(); }
 const { data: rows, error: e2 } = await sb.from('cycles').select('id,data').order('updated_at');
 if (e2) throw e2;
 cycles = (rows || []).map(r => normalize({...r.data, id: r.id}));
 if (isOwner) loadTesters();
 $('sync').textContent = 'Synced to your account';
-phase = 'app'; gate();
+phase = 'app'; gate(); writeCache();
 } catch (err) {
-$('loading').hidden = false;
-$('loading').innerHTML = `Couldn't reach the server. <button type="button" class="link" id="retryLoad">Try again</button>`;
+offline();
 }
 }
 document.addEventListener('click', e => { if (e.target.id === 'retryLoad') loadAll(); });
@@ -1110,7 +1130,7 @@ finally { $('obSubmit').disabled = false; }
 $('ob-tg').addEventListener('input', e => { if (e.target.value.startsWith('@')) e.target.value = e.target.value.replace(/^@+/, ''); });
 $('obCancel').onclick = () => { editingProfile = false; gate(); };
 document.querySelector('header').addEventListener('click', async e => {
-if (e.target.id === 'signOut'){ await sb.auth.signOut(); view = 'home'; testers = null; return loadAll(); }
+if (e.target.id === 'signOut'){ clearCache(); await sb.auth.signOut(); phase = 'loading'; view = 'home'; testers = null; return loadAll(); }
 if (e.target.id !== 'editProfile') return;
 editingProfile = true;
 $('ob-name').value = profile.name; $('ob-tg').value = profile.telegram; $('obErr').textContent = '';
@@ -1132,6 +1152,8 @@ if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
+window.addEventListener('online', () => { if (phase === 'app') loadAll(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 init();
 // pull-to-refresh for the installed (home-screen) app, which has no browser reload gesture
