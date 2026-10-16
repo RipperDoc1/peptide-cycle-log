@@ -355,10 +355,12 @@ items.push({c, dv, x: withStats.find(w => w.c === c)});
 if (items.length) days.push({d, items});
 }
 const later = coming.filter(x => diff(t, x.s.start) > 7);
-const upBody = (days.length ? `<div class="uplist bubbles">${days.map(({d, items}) => `<div class="upday">
+const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 3), shownDays = upMore ? days : near, hidden = days.length - near.length;
+const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show next 3 days' : `Show next 7 days${hidden ? ` (${hidden} more day${hidden === 1 ? '' : 's'})` : ''}`}</button>` : '';
+const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
 <div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q">${num(dv)} ${c.unit}${sec(c, dv) ? ' \u00b7 ' + sec(c, dv) : ''}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</span></div>`).join('')}</div>
-</div>`).join('')}</div>` : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
+</div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 + (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
 const waiting = isOwner ? (testers || []).filter(r => r.status === 'pending') : [];
@@ -368,7 +370,7 @@ const alertBox = waiting.length ? `<section class="panel approvals"><div class="
 <div class="tact"><button class="btn" data-tact="approved" data-id="${r.id}">Approve</button><button class="btn ghost" data-tact="paused" data-id="${r.id}">Pause</button></div>
 </div>`).join('')}</div></div></section>` : '';
 list.innerHTML = alertBox + panel('Today', todaySub, todayBody, badge)
-+ panel('Upcoming', 'Your next scheduled doses for the coming week.', upBody)
++ panel('Upcoming', upMore ? 'Your scheduled doses for the next 7 days.' : 'Your scheduled doses for the next 3 days.', upBody)
 + vialsPanel(withStats.filter(x => x.s.status !== 'complete'), panel);
 return;
 }

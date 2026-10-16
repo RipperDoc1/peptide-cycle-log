@@ -287,3 +287,5 @@ h1{font-size:2.1rem}
 .ptr.spinning .ptr-spin{animation:ptrspin .7s linear infinite}
 @keyframes ptrspin{to{transform:rotate(360deg)}}
 @media (display-mode: standalone){html,body{overscroll-behavior-y:contain}}
+.upmore{display:block;width:100%;margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:var(--r-md);background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.upmore:hover{background:var(--sunken)}
