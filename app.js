@@ -314,7 +314,24 @@ body = `<div class="cyopt"><div class="field"><label class="label" for="cy-pause
 }
 return `<div class="adjust cypanel">${body}<div class="actions"><button class="btn ghost" data-act="cy-cancel">Close</button><span class="err" id="cy-err"></span></div></div>`;
 }
+// tapping a cycle opens its full card in a bottom sheet over the page
+let sheetId = null, sheetFresh = false;
+const detOpen = c => (view === 'home' && ['active','paused'].includes(stats(c).status) ? collapsed : expanded).has(c.id);
 function renderList(){
+const prev = document.querySelector('.sheet'), top = prev ? prev.scrollTop : 0;
+renderListInner();
+const c = sheetId && cycles.find(x => x.id === sheetId);
+if (sheetId && !c) sheetId = null;
+const show = !!c && phase === 'app' && view !== 'add';
+document.documentElement.classList.toggle('sheet-open', show);
+if (!show) return;
+$('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${sheetFresh ? ' anim' : ''}"><div class="sheet-bg" data-act="sheet-close"></div>
+<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(c.name)}"><div class="sheet-bar"><span class="sheet-grab" aria-hidden="true"></span><button type="button" class="sheet-x" data-act="sheet-close" aria-label="Close">✕</button></div>
+${card({c, s: stats(c)}, detOpen(c))}</div></div>`);
+const el = document.querySelector('.sheet');
+if (sheetFresh){ sheetFresh = false; } else el.scrollTop = top;
+}
+function renderListInner(){
 if (phase === 'app') writeCache();
 const withStats = cycles.map(c => ({c, s: stats(c)}));
 const order = {active:0, paused:1, upcoming:2, complete:3};
@@ -444,20 +461,18 @@ else if (s.status === 'upcoming') line = `Starts ${dayWord(s.start)}`;
 else if (s.doseToday != null) line = `Due today · ${doseWithUnits(c, s.doseToday)}`;
 else if (s.next) line = `Next ${dayWord(s.next)} · ${doseWithUnits(c, doseAtIndex(c, s.nextIdx))}`;
 else line = 'No doses left';
-return `<div class="crow${on ? ' open' : ''}"><button type="button" class="crowhead" data-act="row" data-key="${key}" aria-expanded="${on}">
+return `<div class="crow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
 <span class="cmain"><span class="cname">${esc(c.name)}</span><span class="cline">${line}</span></span>
-<span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></button>
-${on ? card(x, expanded.has(c.id)) : ''}</div>`;
+<span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 // Today: compact row (name, today's dose, day x of y, days left); tap to open the full card
 function trow(x, key){
 const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1;
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
-return `<div class="crow trow${on ? ' open' : ''}"><button type="button" class="crowhead" data-act="row" data-key="${key}" aria-expanded="${on}">
+return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
 <span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}${per > 1 ? ` <span class="bu">× ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
-<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></button>
-${on ? card(x, collapsed.has(c.id)) : ''}</div>`;
+<span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 function card({c, s}, open){
 const open_ = isOpen(c);
@@ -869,7 +884,7 @@ selDays = new Set(b.dataset.preset.split(',').map(Number)); renderDays();
 function setView(v, keepForm){
 if (v === 'add' && view !== 'add') prevView = view;
 if (v === 'add' && !keepForm) resetForm();
-view = v; cycId = null; adjustId = null; confirmId = null;
+view = v; cycId = null; adjustId = null; confirmId = null; sheetId = null;
 document.querySelectorAll('#nav [data-view]').forEach(b => b.toggleAttribute('aria-current', b.dataset.view === v));
 document.querySelectorAll('#nav [aria-current]').forEach(b => b.setAttribute('aria-current', 'page'));
 gate();
@@ -889,6 +904,8 @@ cycId = null; renderList();
 $('list').addEventListener('click', async e => {
 const b = e.target.closest('[data-act]'); if (!b) return;
 const c = cycles.find(x => x.id === b.dataset.id);
+if (b.dataset.act === 'sheet'){ sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
+if (b.dataset.act === 'sheet-close'){ sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
 case 'det': {
@@ -1152,6 +1169,7 @@ if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetId){ sheetId = null; renderList(); } });
 window.addEventListener('online', () => { if (phase === 'app') loadAll(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
@@ -1167,7 +1185,7 @@ let y0 = null, dy = 0, busy = false;
 const set = (h, ready) => { el.style.transform = `translate(-50%, ${h - 50}px)`; el.style.opacity = Math.min(h / TRIGGER, 1); el.classList.toggle('ready', !!ready); el.firstChild.style.transform = `rotate(${h * 4}deg)`; };
 window.addEventListener('touchstart', e => {
 if (busy || window.scrollY > 0 || e.touches.length !== 1) { y0 = null; return; }
-if (e.target.closest('input,select,textarea')) { y0 = null; return; }
+if (e.target.closest('input,select,textarea,.sheet') || document.documentElement.classList.contains('sheet-open')) { y0 = null; return; }
 y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none';
 }, {passive: true});
 window.addEventListener('touchmove', e => {

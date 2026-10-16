@@ -289,3 +289,21 @@ h1{font-size:2.1rem}
 @media (display-mode: standalone){html,body{overscroll-behavior-y:contain}}
 .upmore{display:block;width:100%;margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:var(--r-md);background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
 .upmore:hover{background:var(--sunken)}
+
+/* cycle detail bottom sheet */
+html.sheet-open, html.sheet-open body{overflow:hidden}
+.sheet-wrap{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet-bg{position:absolute;inset:0;background:rgba(15,20,30,.45)}
+.sheet{position:relative;width:100%;max-width:560px;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--surface);border-radius:20px 20px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);padding-bottom:env(safe-area-inset-bottom,0)}
+.sheet-wrap.anim .sheet-bg{animation:sheetfade .2s ease-out}
+.sheet-wrap.anim .sheet{animation:sheetup .25s cubic-bezier(.2,.8,.2,1)}
+@keyframes sheetfade{from{opacity:0}}
+@keyframes sheetup{from{transform:translateY(100%)}}
+.sheet-bar{position:sticky;top:0;z-index:1;display:flex;justify-content:center;align-items:center;height:30px;background:var(--surface)}
+.sheet-grab{width:40px;height:5px;border-radius:3px;background:var(--line)}
+.sheet-x{position:absolute;right:10px;top:6px;width:34px;height:34px;border-radius:50%;border:none;background:var(--sunken);color:var(--ink);font-size:.95rem;cursor:pointer}
+.sheet .cyc{border:none;border-radius:0;background:transparent}
+.sheet .cyc .body{padding-top:4px}
+.crowhead .chev{font-size:1.4rem;line-height:1;color:var(--muted)}
+@media (min-width:700px){.sheet-wrap{align-items:center}.sheet{border-radius:20px;max-height:85vh}.sheet-wrap.anim .sheet{animation:sheetfade .2s ease-out}}
+.sheet .cyc .top{padding-right:40px}
