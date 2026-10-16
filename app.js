@@ -495,7 +495,7 @@ selDays = new Set([1,2,3,4,5]); renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
 syncTit(); updateCalc();
-$('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Add cycle';
+$('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Save';
 $('cancelBtn').hidden = false; $('err').textContent = '';
 }
 function fillForm(c, asNew){
@@ -520,7 +520,7 @@ renderSteps();
 syncTit(); updateCalc();
 editingId = asNew ? null : c.id;
 $('formTitle').textContent = asNew ? 'Repeat cycle' : 'Edit cycle';
-$('submitBtn').textContent = asNew ? 'Add cycle' : 'Save changes';
+$('submitBtn').textContent = 'Save';
 $('cancelBtn').hidden = false; $('err').textContent = '';
 $('f-name').focus({preventScroll:true});
 }
