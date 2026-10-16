@@ -340,7 +340,7 @@ const todaySub = !cycles.length ? 'Your daily doses appear here.'
 const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
 ? startCta('Set up your protocol', 'Add the peptides you take to build your schedule. Today’s doses, progress, and vial counts will show up here.')
-: due.length ? due.map(x => card(x, collapsed.has(x.c.id))).join('')
+: due.length ? `<div class="rows">${due.map(x => trow(x, 'home|' + x.c.id)).join('')}</div>`
 : `<div class="pempty quiet"><h3>No dose today</h3>${nextUp ? `<p>Next: ${esc(nextUp.c.name)} ${dayWord(nextUp.s.next)} · ${doseWithUnits(nextUp.c, doseAtIndex(nextUp.c, nextUp.s.nextIdx))}</p>` : '<p>Nothing scheduled.</p>'}</div>`;
 const days = [];
 for (let k = 1; k <= 7; k++){
@@ -438,6 +438,16 @@ return `<div class="crow${on ? ' open' : ''}"><button type="button" class="crowh
 <span class="cmain"><span class="cname">${esc(c.name)}</span><span class="cline">${line}</span></span>
 <span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></button>
 ${on ? card(x, expanded.has(c.id)) : ''}</div>`;
+}
+// Today: compact row (name, today's dose, day x of y, days left); tap to open the full card
+function trow(x, key){
+const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1;
+const sx = sec(c, s.doseToday);
+const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
+return `<div class="crow trow${on ? ' open' : ''}"><button type="button" class="crowhead" data-act="row" data-key="${key}" aria-expanded="${on}">
+<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}${per > 1 ? ` <span class="bu">× ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
+<span class="chev" aria-hidden="true">${on ? '▴' : '▾'}</span></button>
+${on ? card(x, collapsed.has(c.id)) : ''}</div>`;
 }
 function card({c, s}, open){
 const open_ = isOpen(c);
