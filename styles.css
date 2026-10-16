@@ -280,3 +280,10 @@ h1{font-size:2.1rem}
 
 .trow .tdose{font-size:1.25rem;font-weight:700;color:var(--ink,inherit);line-height:1.2}
 .trow .tdose .bu{font-size:.8rem;font-weight:600;opacity:.65}
+
+.ptr{position:fixed;top:env(safe-area-inset-top,0);left:50%;z-index:50;width:38px;height:38px;border-radius:50%;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.15);display:grid;place-items:center;transform:translate(-50%,-50px);opacity:0;pointer-events:none}
+.ptr-spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--muted)}
+.ptr.ready .ptr-spin{border-top-color:var(--ink)}
+.ptr.spinning .ptr-spin{animation:ptrspin .7s linear infinite}
+@keyframes ptrspin{to{transform:rotate(360deg)}}
+@media (display-mode: standalone){html,body{overscroll-behavior-y:contain}}

@@ -1132,4 +1132,33 @@ sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OU
 loadAll();
 }
 init();
+// pull-to-refresh for the installed (home-screen) app, which has no browser reload gesture
+(function pullToRefresh(){
+const standalone = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+if (!standalone) return;
+const el = document.createElement('div'); el.className = 'ptr'; el.innerHTML = '<span class="ptr-spin"></span>';
+document.body.appendChild(el);
+const MAX = 110, TRIGGER = 70;
+let y0 = null, dy = 0, busy = false;
+const set = (h, ready) => { el.style.transform = `translate(-50%, ${h - 50}px)`; el.style.opacity = Math.min(h / TRIGGER, 1); el.classList.toggle('ready', !!ready); el.firstChild.style.transform = `rotate(${h * 4}deg)`; };
+window.addEventListener('touchstart', e => {
+if (busy || window.scrollY > 0 || e.touches.length !== 1) { y0 = null; return; }
+if (e.target.closest('input,select,textarea')) { y0 = null; return; }
+y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none';
+}, {passive: true});
+window.addEventListener('touchmove', e => {
+if (y0 == null) return;
+dy = e.touches[0].clientY - y0;
+if (dy <= 0 || window.scrollY > 0) { set(0); return; }
+const h = Math.min(MAX, dy * 0.5);
+set(h, h >= TRIGGER);
+}, {passive: true});
+window.addEventListener('touchend', () => {
+if (y0 == null) return;
+const h = Math.min(MAX, dy * 0.5); y0 = null;
+el.style.transition = 'transform .2s, opacity .2s';
+if (h >= TRIGGER){ busy = true; el.classList.add('spinning'); set(TRIGGER, true); setTimeout(() => location.reload(), 250); }
+else set(0);
+}, {passive: true});
+})();
 })();
