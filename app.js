@@ -174,7 +174,7 @@ if (c.unit === 'units') return mgTxt;
 if (c.unit === 'mL') return un != null ? `${mgTxt} \u00b7 ${u(un)}` : mgTxt;
 return un != null ? u(un) : '';
 }
-const u = n => n == null ? '' : `${+n.toFixed(1)} u`;
+const u = n => n == null ? '' : `${+n.toFixed(1)} units`;
 function stats(c){
 const lenDays = lenOf(c), sched = schedule(c), t = today();
 const start = parse(c.start);
@@ -746,7 +746,7 @@ syncUnitsField();
 const unit = $('f-unit').value;
 if (!(v > 0 && b > 0)) { $('calc').innerHTML = ''; return; }
 const conc = v / b;
-const parts = [`Concentration <b>${num(+conc.toFixed(3))} mg/mL</b>`, `${num(+(conc/10).toFixed(4))} mg per 10 u`];
+const parts = [`Concentration <b>${num(+conc.toFixed(3))} mg/mL</b>`, `${num(+(conc/10).toFixed(4))} mg per 10 units`];
 if (d > 0){
 if (unit === 'units' || unit === 'mL'){
 const mg = unit === 'units' ? d / 100 * conc : d * conc;
