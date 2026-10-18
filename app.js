@@ -644,6 +644,8 @@ ${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-val
 </div>
 ${cycId === c.id ? cyclePanel(c, s) : ''}
 ${adjForm}
+${acts}
+<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">${notesOpen.has(c.id) ? 'Hide notes' : 'Notes' + ((c.notes || []).length ? ` (${c.notes.length})` : '')}</button></div></div>
 ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
@@ -653,7 +655,6 @@ ${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>$
 </div>
 ${lifeLine}</div>` + detailsBlock(c, s) : ''}
 ${notesOpen.has(c.id) ? notesBlock(c) : ''}
-<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">Notes${(c.notes || []).length ? ` (${c.notes.length})` : ''}</button></div>${acts}</div>
 </div>
 </article>`;
 }
@@ -1077,8 +1078,8 @@ if (act === 'nx-stop'){ await saveCycle({...c, noRepeat: true}, 'err'); return; 
 } catch { b.disabled = false; msg(offMsg('Couldn\'t start the next round. Try again.')); }
 return;
 }
-if (b.dataset.act === 'sheet'){ sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
-if (b.dataset.act === 'sheet-close'){ sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
+if (b.dataset.act === 'sheet'){ [expanded, collapsed, notesOpen].forEach(st => st.delete(b.dataset.id)); sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
+if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
 case 'notes': notesOpen.has(c.id) ? notesOpen.delete(c.id) : notesOpen.add(c.id); renderList(); break;
@@ -1391,7 +1392,7 @@ if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetId){ sheetId = null; renderList(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; renderList(); } });
 // light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
 (function themeToggle(){
 const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
