@@ -363,3 +363,5 @@ html.sheet-open, html.sheet-open body{overflow:hidden}
 .attnrow b{display:block;font-weight:600}
 .attnrow span{color:var(--danger);font-size:.88rem}
 .attnrow .btn{background:var(--danger);border-color:var(--danger);color:#fff;flex:0 0 auto}
+.dupwarn{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;background:color-mix(in srgb,#e0a100 14%,var(--surface));border:1.5px solid #d39b00;border-radius:var(--r-md);padding:12px 14px;font-size:.92rem}
+.dupwarn span{color:var(--ink)}

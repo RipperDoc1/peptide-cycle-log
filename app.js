@@ -54,7 +54,8 @@ if ((c.vialMg > 0) !== (c.bacMl > 0)) out.push(c.premixed ? 'Vial size or concen
 else if ((c.unit === 'units' || c.unit === 'mL') && c.dose != null && !(c.vialMg > 0 && c.bacMl > 0)) out.push(`Dose is in ${c.unit} but there is no vial info to work out mg`);
 return out;
 }
-let nxPick = null; // off-cycle item whose start-date picker is open
+let nxPick = null;
+let dupAck = null; // compound name the user already confirmed as an intentional duplicate // off-cycle item whose start-date picker is open
 const doseDay = (c, i, d) => c.interval > 1 ? i % c.interval === 0 : c.days.includes(d.getDay());
 const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
 : c.lenUnit === 'weeks' ? c.lenValue * 7 : c.lenValue;
@@ -594,10 +595,11 @@ selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
 syncTit(); updateCalc();
-$('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Save';
+$('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Save'; clearDup();
 $('cancelBtn').hidden = false; $('err').textContent = '';
 }
 function fillForm(c, asNew){
+clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; syncLen();
@@ -660,6 +662,18 @@ plan.push(r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose
 }
 }
 const existing = editingId && cycles.find(c => c.id === editingId);
+{ // one-time check: another cycle of this compound is already in use
+const key = name.toLowerCase();
+const clash = cycles.find(x => x.id !== editingId && String(x.name).trim().toLowerCase() === key && stats(x).status !== 'complete');
+if (clash && dupAck !== key){
+dupAck = key;
+const st = stats(clash);
+$('dupWarn').innerHTML = `<b>You already have ${st.status === "active" ? "an active" : st.status === "upcoming" ? "an upcoming" : "a paused"} ${esc(clash.name)} cycle</b><span>${st.status === 'upcoming' ? 'Starts' : 'Started'} ${fmt(st.start)}${isOpen(clash) ? ' · open-ended' : ' · ends ' + fmt(st.end)}. Saving adds a second cycle of the same compound. Tap <b>Save anyway</b> to keep both, or Cancel.</span>`;
+$('dupWarn').hidden = false; $('submitBtn').textContent = 'Save anyway';
+$('dupWarn').scrollIntoView({block: 'nearest', behavior: 'smooth'});
+return;
+}
+}
 const c = { ...(existing || {}), id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
 offValue: offValue > 0 ? offValue : null, offUnit: $('f-offunit').value,
 name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: selEvery ? [0,1,2,3,4,5,6] : [...selDays].sort(), interval: selEvery || null,
@@ -942,6 +956,8 @@ $('f-units').value = d >= 0 ? +((unit === 'mcg' ? d / 1000 : d) / conc * 100).to
 }
 $('f-unit').addEventListener('change', () => { syncTit(); updateCalc(); });
 $('f-tit').addEventListener('change', syncTit);
+function clearDup(){ dupAck = null; $('dupWarn').hidden = true; $('submitBtn').textContent = 'Save'; }
+$('f-name').addEventListener('input', () => { if (dupAck !== null) clearDup(); });
 $('form').addEventListener('input', updateVials);
 $('form').addEventListener('change', updateVials);
 $('form').addEventListener('click', e => { if (e.target.closest('.day,[data-preset],[data-rm],#addStep,#addSet')) setTimeout(updateVials); });
