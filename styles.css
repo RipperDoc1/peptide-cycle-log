@@ -506,3 +506,10 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .wn-body ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .wn-body li{line-height:1.4}
 .wn-body .actions{margin-top:20px;justify-content:flex-end}
+
+.vconfirm{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface);border-radius:var(--r-sm);padding:10px 12px}
+.vconfirm b{display:block;font-weight:700}
+.vconfirm.edit{flex-direction:column;align-items:stretch}
+.vcgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vconfirm .link{align-self:flex-start}
+.vconfirm input{background:var(--sunken);border:1px solid var(--line)}

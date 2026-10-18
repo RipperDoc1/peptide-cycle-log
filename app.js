@@ -241,30 +241,36 @@ return mg / (c.vialMg / c.bacMl) * 100;
 }
 // what's left in the vial in use: walks past doses from the cycle start; each logged refill
 // (or a dose that no longer fits) starts a full vial, then looks ahead to when it runs out
+const rDate = r => typeof r === 'string' ? r : r.date;
+const rfEdit = new Set(); // vial rows where the new-vial size is being changed
 function vialStatus(c){
 if (!(c.vialMg > 0) || !(c.bacMl > 0) || c.dose == null || mgOf(c, 1) == null) return null;
 const sched = schedule(c), days = new Set(c.days), per = c.perDay || 1, t = today(), conc = c.vialMg / c.bacMl;
-const refills = (c.refills || []).map(parse).sort((a, b) => a - b);
-let rem = c.vialMg, opened = parse(c.start), auto = false, ri = 0, i = 0;
+// each vial keeps its own size/mix: the first one from vial0 (if the size was ever changed), later ones from their refill entry
+const refills = (c.refills || []).map(r => ({d: parse(rDate(r)), mg: r.mg > 0 ? r.mg : c.vialMg, ml: r.ml > 0 ? r.ml : c.bacMl})).sort((a, b) => a.d - b.d);
+let vial = c.vial0 && c.vial0.mg > 0 ? {mg: c.vial0.mg, ml: c.vial0.ml} : {mg: c.vialMg, ml: c.bacMl};
+const mgIn = dv => mgOf({...c, vialMg: vial.mg, bacMl: vial.ml}, dv);
+let rem = vial.mg, opened = parse(c.start), auto = false, ri = 0, i = 0;
+const open = r => { vial = {mg: r.mg, ml: r.ml}; rem = r.mg; opened = r.d; auto = false; ri++; };
 for (; i < sched.length && sched[i] < t; i++){
 const d = sched[i];
-while (ri < refills.length && refills[ri] <= d){ rem = c.vialMg; opened = refills[ri]; auto = false; ri++; }
+while (ri < refills.length && refills[ri].d <= d) open(refills[ri]);
 if (!doseDay(c, i, d)) continue;
 const dv = doseAtIndex(c, i); if (!dv) continue;
-const mg = mgOf(c, dv);
-for (let k = 0; k < per; k++){ if (mg > rem + 1e-9){ rem = c.vialMg; opened = d; auto = true; } rem -= mg; }
+const mg = mgIn(dv);
+for (let k = 0; k < per; k++){ if (mg > rem + 1e-9){ rem = vial.mg; opened = d; auto = true; } rem -= mg; }
 }
-while (ri < refills.length && refills[ri] <= t){ rem = c.vialMg; opened = refills[ri]; auto = false; ri++; }
+while (ri < refills.length && refills[ri].d <= t) open(refills[ri]);
 let r2 = rem, left = 0, runOut = null;
 outer: for (; i < sched.length; i++){
 const d = sched[i];
 if (!doseDay(c, i, d)) continue;
 const dv = doseAtIndex(c, i); if (!dv) continue;
-const mg = mgOf(c, dv);
+const mg = mgIn(dv);
 for (let k = 0; k < per; k++){ if (mg > r2 + 1e-9){ runOut = d; break outer; } r2 -= mg; left++; }
 }
 rem = Math.max(rem, 0);
-return {rem, pct: rem / c.vialMg, opened, auto, dosesLeft: left, runOut, mlLeft: rem / conc, conc};
+return {rem, pct: rem / vial.mg, opened, auto, dosesLeft: left, runOut, mlLeft: rem / (vial.mg / vial.ml), conc: vial.mg / vial.ml, vialMg: vial.mg, vialMl: vial.ml};
 }
 // the other way to read a dose: syringe units for mg/mcg, mg for units, mg + units for mL
 function sec(c, dose){
@@ -550,9 +556,21 @@ if (!items.length) return '';
 return panel('Vials', 'What\u2019s left in each vial you\u2019re using. Tap one to log a new vial.', `<div class="vials">${items.map(({x, v}) => {
 const c = x.c, key = 'vial|' + c.id, on = openRows.has(key), pct = Math.round(v.pct * 100);
 const lvl = pct <= 20 ? 'low' : pct <= 50 ? 'mid' : 'ok';
-const mgTxt = `${num(+v.rem.toFixed(2))} of ${num(+c.vialMg.toFixed(2))} mg left`;
+const mgTxt = `${num(+v.rem.toFixed(2))} of ${num(+v.vialMg.toFixed(2))} mg left`;
 const sub = v.runOut ? `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 new vial ${dayWord(v.runOut)}` : `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 lasts the rest of the cycle`;
-const hist = [`${fmt(parse(c.start))} (start)`, ...(c.refills || []).slice().sort().map(r => `${fmt(parse(r))} <button class="link del" data-act="refill-rm" data-id="${c.id}" data-date="${r}">remove</button>`)];
+const vdesc = (mg, ml) => c.premixed ? `${num(+ml.toFixed(3))} mL at ${num(+(mg / ml).toFixed(3))} mg/mL (${num(+mg.toFixed(3))} mg)` : `${num(+mg.toFixed(3))} mg + ${num(+ml.toFixed(3))} mL BAC water`;
+const sizeTag = r => typeof r === 'object' && r.mg > 0 && (r.mg !== c.vialMg || r.ml !== c.bacMl) ? ` (${c.premixed ? num(+r.ml.toFixed(3)) + ' mL' : num(+r.mg.toFixed(3)) + ' mg'})` : '';
+const hist = [`${fmt(parse(c.start))} (start${c.vial0 && (c.vial0.mg !== c.vialMg || c.vial0.ml !== c.bacMl) ? ', ' + (c.premixed ? num(+c.vial0.ml.toFixed(3)) + ' mL' : num(+c.vial0.mg.toFixed(3)) + ' mg') : ''})`, ...(c.refills || []).slice().sort((a, b) => rDate(a).localeCompare(rDate(b))).map(r => `${fmt(parse(rDate(r)))}${sizeTag(r)} <button class="link del" data-act="refill-rm" data-id="${c.id}" data-date="${rDate(r)}">remove</button>`)];
+const ed = rfEdit.has(c.id);
+const sizeBox = ed ? `<div class="vconfirm edit"><span class="label">New vial</span>
+<div class="vcgrid">${c.premixed
+? `<div class="field"><label class="label" for="rf-a-${c.id}">Vial size (mL)</label><input id="rf-a-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.bacMl.toFixed(4)}"></div>
+<div class="field"><label class="label" for="rf-b-${c.id}">Concentration (mg/mL)</label><input id="rf-b-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+(c.vialMg / c.bacMl).toFixed(4)}"></div>`
+: `<div class="field"><label class="label" for="rf-a-${c.id}">Vial size (mg)</label><input id="rf-a-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.vialMg.toFixed(4)}"></div>
+<div class="field"><label class="label" for="rf-b-${c.id}">BAC water (mL)</label><input id="rf-b-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.bacMl.toFixed(4)}"></div>`}</div>
+<span class="hint">A different size or mix changes syringe units for doses from this vial on. Your cycle stays the same.</span>
+<button class="link" data-act="rf-change" data-id="${c.id}">Keep current size</button></div>`
+: `<div class="vconfirm"><div><span class="label">New vial</span><b>${vdesc(c.vialMg, c.bacMl)}</b></div><button class="link" data-act="rf-change" data-id="${c.id}">Change</button></div>`;
 return `<div class="vialrow ${lvl}${on ? ' open' : ''}">
 <button type="button" class="vialhead" data-act="row" data-key="${key}" aria-expanded="${on}">
 <span class="vialmeter" aria-hidden="true"><span class="vm-fill" style="height:${pct}%"></span></span>
@@ -563,7 +581,8 @@ return `<div class="vialrow ${lvl}${on ? ' open' : ''}">
 <span class="chev" aria-hidden="true">${on ? '\u25b4' : '\u25be'}</span></button>
 ${on ? `<div class="refill">
 <div class="field"><label class="label" for="rf-${c.id}">New vial opened on</label><input id="rf-${c.id}" type="date" value="${iso(today())}"></div>
-<button class="btn" data-act="refill" data-id="${c.id}">Save new vial</button>
+${sizeBox}
+<button class="btn" data-act="refill" data-id="${c.id}">Confirm new vial</button>
 <span class="hint">Current vial ${v.auto ? 'assumed opened' : 'opened'} ${fmt(v.opened)}${v.auto ? ' (when the last one ran out)' : ''}.</span>
 <div class="adjlist"><span class="label">Vials opened</span><div>${hist.join(' \u00b7 ')}</div></div>
 <span class="err" id="rf-err-${c.id}"></span>
@@ -1130,12 +1149,26 @@ await saveCycle({...c, pauses, endedOn: d}, 'cy-err');
 break;
 }
 case 'refill': {
-const d = $('rf-' + c.id).value;
-if (!d) { $('rf-err-' + c.id).textContent = 'Pick the date you opened the new vial.'; break; }
-await saveCycle({...c, refills: [...new Set([...(c.refills || []), d])].sort()}, 'rf-err-' + c.id);
+const d = $('rf-' + c.id).value, err = $('rf-err-' + c.id);
+if (!d) { err.textContent = 'Pick the date you opened the new vial.'; break; }
+if (d < c.start) { err.textContent = 'Pick a date on or after the cycle started.'; break; }
+let mg = c.vialMg, ml = c.bacMl;
+if (rfEdit.has(c.id)){
+const a = parseFloat($('rf-a-' + c.id).value), bb = parseFloat($('rf-b-' + c.id).value);
+if (!(a > 0) || !(bb > 0)) { err.textContent = c.premixed ? 'Enter the vial size in mL and the concentration.' : 'Enter the vial size in mg and the BAC water in mL.'; break; }
+if (c.premixed){ ml = a; mg = a * bb; } else { mg = a; ml = bb; }
+}
+const changed = Math.abs(mg - c.vialMg) > 1e-9 || Math.abs(ml - c.bacMl) > 1e-9;
+// keep earlier vials at the size they were before this change
+const old = (c.refills || []).filter(r => rDate(r) !== d).map(r => typeof r === 'string' ? {date: r, mg: c.vialMg, ml: c.bacMl} : r);
+const next = {...c, refills: [...old, {date: d, mg, ml}].sort((x, y) => x.date.localeCompare(y.date))};
+if (changed){ next.vial0 = c.vial0 || {mg: c.vialMg, ml: c.bacMl}; next.vialMg = mg; next.bacMl = ml; }
+rfEdit.delete(c.id);
+await saveCycle(next, 'rf-err-' + c.id);
 break;
 }
-case 'refill-rm': await saveCycle({...c, refills: (c.refills || []).filter(r => r !== b.dataset.date)}, 'err'); break;
+case 'refill-rm': await saveCycle({...c, refills: (c.refills || []).filter(r => rDate(r) !== b.dataset.date)}, 'err'); break;
+case 'rf-change': rfEdit.has(c.id) ? rfEdit.delete(c.id) : rfEdit.add(c.id); renderList(); break;
 case 'cy-reopen': await saveCycle({...c, endedOn: null}, 'cy-err'); break;
 case 'pause-rm': {
 const i = +b.dataset.i;
