@@ -592,3 +592,19 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .sharebtn svg{width:19px;height:19px}
 .sharebtn:active{transform:scale(.95)}
 .cyc .top .name{flex:1;min-width:0}
+
+.adjseg{justify-self:start}
+.cfm{z-index:45}
+.cfmbox{max-width:420px}
+.cfm-body{padding:26px 24px 22px;display:flex;flex-direction:column;gap:14px}
+.cfm-body h3{margin:-6px 0 0;font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.cfm-dose{background:var(--accent-soft);border-radius:var(--r-md);padding:16px 18px;display:flex;flex-direction:column;gap:2px}
+.cfm-dose b{font-size:2.3rem;font-weight:800;line-height:1.1;letter-spacing:-.02em}
+.cfm-units{font-size:1.05rem;font-weight:700;color:var(--sel)}
+.cfm-per{font-size:.88rem;color:var(--muted);margin-top:4px}
+.cfm-rows{display:flex;flex-direction:column}
+.cfm-rows div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.cfm-rows span{color:var(--muted)}
+.cfm-actions{justify-content:space-between}
+.cfm-actions .btn{flex:1}
+.cfm-actions .btn{white-space:nowrap;padding-left:12px;padding-right:12px}

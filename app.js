@@ -56,6 +56,43 @@ return out;
 }
 let nxPick = null;
 let dupAck = null;
+// change-dose helpers: enter the new dose in the cycle's unit or the other one (mg <-> syringe units), then confirm
+let adjMode = null, adjDraft = null, adjConfirm = null;
+const concOf = c => c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
+const altUnit = c => !concOf(c) ? null : (c.unit === 'mg' || c.unit === 'mcg') ? 'units' : c.unit === 'units' ? 'mg' : null;
+function toBase(c, v, mode){
+if (mode === c.unit) return v;
+const conc = concOf(c);
+if (mode === 'units'){ const mg = v / 100 * conc; return c.unit === 'mcg' ? mg * 1000 : mg; }
+if (mode === 'mg' && c.unit === 'units') return v / conc * 100;
+return v;
+}
+function fromBase(c, v, mode){
+if (mode === c.unit) return v;
+const conc = concOf(c);
+if (mode === 'units'){ const mg = c.unit === 'mcg' ? v / 1000 : v; return mg / conc * 100; }
+if (mode === 'mg' && c.unit === 'units') return v / 100 * conc;
+return v;
+}
+function adjHint(c, base, mode){
+if (mode !== c.unit) return `= ${num(+base.toFixed(4))} ${c.unit}${sec(c, base) && c.unit !== 'units' ? '' : ''} per injection`;
+return sec(c, base) ? `= ${sec(c, base)} per injection` : '';
+}
+function adjConfirmHtml(){
+const c = cycles.find(x => x.id === adjConfirm.id); if (!c) return '';
+const s = stats(c), base = adjConfirm.base, mg = mgOf(c, base), un = unitsFor(c, base), per = c.perDay || 1;
+const main = mg != null ? `${num(+mg.toFixed(4))} mg` : `${num(base)} ${c.unit}`;
+const unitsTx = un != null ? `${+un.toFixed(1)} units` : (c.unit !== 'mg' && mg == null ? '' : '');
+const was = s.curDose != null ? `${mgOf(c, s.curDose) != null ? num(+mgOf(c, s.curDose).toFixed(4)) + ' mg' : num(s.curDose) + ' ' + c.unit}${unitsFor(c, s.curDose) != null ? ' · ' + (+unitsFor(c, s.curDose).toFixed(1)) + ' units' : ''}` : '';
+const when = parse(adjConfirm.date).toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+return `<div class="sheet-wrap anim cfm"><div class="sheet-bg" data-act="adj-back"></div>
+<div class="sheet cfmbox" role="alertdialog" aria-modal="true" aria-label="Confirm dose change">
+<div class="cfm-body"><span class="label">Confirm dose change</span><h3>${esc(c.name)}</h3>
+<div class="cfm-dose"><span class="label">New dose per injection</span><b>${main}</b>${unitsTx ? `<span class="cfm-units">${unitsTx} on a U-100 syringe</span>` : ''}${per > 1 ? `<span class="cfm-per">${per}× a day · ${mg != null ? num(+(mg * per).toFixed(4)) + ' mg' : num(+(base * per).toFixed(4)) + ' ' + c.unit}${un != null ? ' · ' + (+(un * per).toFixed(1)) + ' units' : ''} per day</span>` : ''}</div>
+<div class="cfm-rows"><div><span>Starting</span><b>${when}</b></div>${was ? `<div><span>Current dose</span><b>${was}</b></div>` : ''}</div>
+<div class="actions cfm-actions"><button class="btn ghost" data-act="adj-back">Go back</button><button class="btn" data-act="adj-confirm" data-id="${c.id}">Confirm change</button></div>
+<span class="err" id="cfm-err"></span></div></div></div>`;
+}
 let allYear = (() => { try { return parseInt(localStorage.getItem('pcl-allyear'), 10) || new Date().getFullYear(); } catch { return new Date().getFullYear(); } })();
 let allMode = (() => { try { return localStorage.getItem('pcl-allmode') === 'month' ? 'month' : 'list'; } catch { return 'list'; } })();
 const notesOpen = new Set();
@@ -535,6 +572,7 @@ $('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${sheetFresh ? 
 ${card({c, s: stats(c)}, detOpen(c))}</div></div>`);
 const el = document.querySelector('.sheet');
 if (sheetFresh){ sheetFresh = false; } else el.scrollTop = top;
+if (adjConfirm) $('list').insertAdjacentHTML('beforeend', adjConfirmHtml());
 }
 function renderListInner(){
 if (phase === 'app') writeCache();
@@ -777,10 +815,15 @@ const progR = s.status === 'complete' ? (s.endedEarly ? 'Ended early' : 'Complet
 : open_ ? (s.status === 'paused' ? 'Open-ended · on hold' : 'Open-ended')
 : s.status === 'paused' ? `${s.remaining} day${s.remaining === 1 ? '' : 's'} left · on hold`
 : `${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
+const alt = altUnit(c), mode = adjustId === c.id && adjMode && (adjMode === c.unit || adjMode === alt) ? adjMode : c.unit;
+const dDate = adjDraft && adjDraft.id === c.id && adjDraft.date ? adjDraft.date : iso(today() < s.start ? s.start : today() > s.end ? s.end : today());
+const dBase = adjDraft && adjDraft.id === c.id ? adjDraft.base : s.curDose;
+const dVal = dBase == null ? '' : +fromBase(c, dBase, mode).toFixed(mode === 'units' ? 1 : 4);
 const adjForm = adjustId === c.id ? `<div class="adjust">
-<div class="field"><label class="label" for="a-date">Starting on</label><input id="a-date" type="date" value="${iso(today() < s.start ? s.start : today() > s.end ? s.end : today())}"></div>
-<div class="field"><label class="label" for="a-dose">New dose (${c.unit})</label><input id="a-dose" type="number" min="0" step="any" inputmode="decimal" value="${s.curDose ?? ''}" data-id="${c.id}"></div>
-<span class="hint" id="a-units" style="grid-column:1/-1">${sec(c, s.curDose) ? `= ${sec(c, s.curDose)} per injection` : ''}</span>
+${alt ? `<div class="seg adjseg" role="tablist" aria-label="Enter dose in" style="grid-column:1/-1"><button type="button" role="tab" data-act="adj-mode" data-id="${c.id}" data-mode="${c.unit}" aria-selected="${mode === c.unit}">${c.unit}</button><button type="button" role="tab" data-act="adj-mode" data-id="${c.id}" data-mode="${alt}" aria-selected="${mode === alt}">${alt}</button></div>` : ''}
+<div class="field"><label class="label" for="a-date">Starting on</label><input id="a-date" type="date" value="${dDate}"></div>
+<div class="field"><label class="label" for="a-dose">New dose (${mode})</label><input id="a-dose" type="number" min="0" step="any" inputmode="decimal" value="${dVal}" data-id="${c.id}" data-mode="${mode}"></div>
+<span class="hint" id="a-units" style="grid-column:1/-1">${dBase != null ? adjHint(c, dBase, mode) : ''}</span>
 <div class="actions"><button class="btn" data-act="chg-save" data-id="${c.id}">Save dose change</button><button class="btn ghost" data-act="chg-cancel">Cancel</button><span class="err" id="a-err"></span></div>
 </div>` : '';
 const on = x => x ? ' on' : '';
@@ -1237,7 +1280,7 @@ return;
 if (b.dataset.act === 'vsheet'){ vialSheetId = b.dataset.id; vialFresh = true; rfEdit.delete(b.dataset.id); renderList(); return; }
 if (b.dataset.act === 'vsheet-close'){ vialSheetId = null; renderList(); return; }
 if (b.dataset.act === 'sheet'){ [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(b.dataset.id)); sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
-if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
+if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; adjConfirm = null; adjDraft = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
 case 'share': b.disabled = true; try { await shareCycle(c); } catch (e) { console.error(e); } finally { b.disabled = false; } break;
@@ -1317,18 +1360,31 @@ const i = +b.dataset.i;
 await saveCycle({...c, pauses: (c.pauses||[]).filter((_, k) => k !== i)}, 'err');
 break;
 }
-case 'chg': confirmId = null; cycId = null; if (adjustId === c.id){ adjustId = null; renderList(); break; } adjustId = c.id; renderList(); { const el = $('a-dose'); if (el){ el.focus(); el.select(); } } break;
+case 'chg': confirmId = null; cycId = null; adjDraft = null; adjMode = c.unit; if (adjustId === c.id){ adjustId = null; renderList(); break; } adjustId = c.id; renderList(); { const el = $('a-dose'); if (el){ el.focus(); el.select(); } } break;
 case 'chg-cancel': adjustId = null; renderList(); break;
+case 'adj-mode': {
+const v = parseFloat($('a-dose').value), from = $('a-dose').dataset.mode || c.unit;
+adjDraft = {id: c.id, date: $('a-date').value, base: v >= 0 ? toBase(c, v, from) : null};
+adjMode = b.dataset.mode; renderList(); break;
+}
 case 'chg-save': {
-const date = $('a-date').value, v = $('a-dose').value.trim(), dose = parseFloat(v);
+const date = $('a-date').value, v = $('a-dose').value.trim(), val = parseFloat(v), mode = $('a-dose').dataset.mode || c.unit;
 if (!date) { $('a-err').textContent = 'Pick the date the new dose starts.'; break; }
-if (v === '' || !(dose >= 0)) { $('a-err').textContent = 'Enter the new dose.'; break; }
+if (v === '' || !(val >= 0)) { $('a-err').textContent = 'Enter the new dose.'; break; }
+const base = +toBase(c, val, mode).toFixed(6);
+adjDraft = {id: c.id, date, base};
+adjConfirm = {id: c.id, date, base}; renderList(); break;
+}
+case 'adj-back': adjConfirm = null; renderList(); break;
+case 'adj-confirm': {
+const {date, base: dose} = adjConfirm;
 const ni = idxOfDate(c, parse(date));
 const plan = [...(c.plan||[]).filter(p => planIdx(c, p) !== ni), {date, dose}].sort((a,b) => planIdx(c, a) - planIdx(c, b));
 const next = {...c, titrate: true, plan};
 delete next.every; delete next.step; delete next.limit; delete next.dir;
-try { await store.save(next); cycles = cycles.map(x => x.id === c.id ? normalize(next) : x); adjustId = null; renderList(); }
-catch { $('a-err').textContent = offMsg('Couldn\'t save. Try again.'); }
+b.disabled = true;
+try { await store.save(next); cycles = cycles.map(x => x.id === c.id ? normalize(next) : x); adjustId = null; adjConfirm = null; adjDraft = null; renderList(); }
+catch { b.disabled = false; const e = $('cfm-err'); if (e) e.textContent = offMsg('Couldn\'t save. Try again.'); }
 break;
 }
 case 'chg-rm': {
@@ -1350,9 +1406,8 @@ confirmId = null; if (editingId === c.id) resetForm(); renderList(); break;
 });
 $('list').addEventListener('input', e => {
 if (e.target.id !== 'a-dose') return;
-const c = cycles.find(x => x.id === e.target.dataset.id), v = parseFloat(e.target.value);
-const sx = c && v >= 0 ? sec(c, v) : '';
-$('a-units').textContent = sx ? `= ${sx} per injection` : '';
+const c = cycles.find(x => x.id === e.target.dataset.id), v = parseFloat(e.target.value), mode = e.target.dataset.mode || (c && c.unit);
+$('a-units').textContent = c && v >= 0 ? adjHint(c, toBase(c, v, mode), mode) : '';
 });
 const SB_URL = 'https://ojxscacnyybvtxffbere.supabase.co';
 const SB_KEY = 'sb_publishable_bo2h1xqaDYMqEaFNdQwNKA_dcfA_T9h';
@@ -1567,7 +1622,7 @@ if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetId){ vialSheetId = null; renderList(); return; } if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; renderList(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetId){ vialSheetId = null; renderList(); return; } if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; adjConfirm = null; adjDraft = null; renderList(); } });
 // light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
 (function themeToggle(){
 const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
