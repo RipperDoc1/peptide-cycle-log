@@ -417,15 +417,24 @@ body = `<div class="cyopt"><div class="field"><label class="label" for="cy-pause
 return `<div class="adjust cypanel">${body}<div class="actions"><button class="btn ghost" data-act="cy-cancel">Close</button><span class="err" id="cy-err"></span></div></div>`;
 }
 // tapping a cycle opens its full card in a bottom sheet over the page
-let sheetId = null, sheetFresh = false;
+let sheetId = null, sheetFresh = false, vialSheetId = null, vialFresh = false;
 const detOpen = c => (view === 'home' && ['active','paused'].includes(stats(c).status) ? collapsed : expanded).has(c.id);
 function renderList(){
 const prev = document.querySelector('.sheet'), top = prev ? prev.scrollTop : 0;
 renderListInner();
+const vc = vialSheetId && cycles.find(x => x.id === vialSheetId), vv = vc && vialStatus(vc);
+if (vialSheetId && !vv) vialSheetId = null;
 const c = sheetId && cycles.find(x => x.id === sheetId);
 if (sheetId && !c) sheetId = null;
+const showV = !!vv && phase === 'app' && view !== 'add';
 const show = !!c && phase === 'app' && view !== 'add';
-document.documentElement.classList.toggle('sheet-open', show);
+document.documentElement.classList.toggle('sheet-open', show || showV);
+if (showV){
+$('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${vialFresh ? ' anim' : ''}"><div class="sheet-bg" data-act="vsheet-close"></div>
+<div class="sheet vsheet" role="dialog" aria-modal="true" aria-label="${esc(vc.name)} vial"><div class="sheet-bar"><button type="button" class="sheet-x" data-act="vsheet-close" aria-label="Close">\u2715</button></div>
+<div class="vs-body">${vialRow(vc, vv, true)}</div></div></div>`);
+vialFresh = false;
+}
 if (!show) return;
 $('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${sheetFresh ? ' anim' : ''}"><div class="sheet-bg" data-act="sheet-close"></div>
 <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(c.name)}"><div class="sheet-bar"><span class="sheet-grab" aria-hidden="true"></span><button type="button" class="sheet-x" data-act="sheet-close" aria-label="Close">✕</button></div>
@@ -553,8 +562,11 @@ list.innerHTML = panel(titles[view], sub, shown.length
 function vialsPanel(rows, panel){
 const items = rows.map(x => ({x, v: vialStatus(x.c)})).filter(r => r.v);
 if (!items.length) return '';
-return panel('Vials', 'What\u2019s left in each vial you\u2019re using. Tap one to log a new vial.', `<div class="vials">${items.map(({x, v}) => {
-const c = x.c, key = 'vial|' + c.id, on = openRows.has(key), pct = Math.round(v.pct * 100);
+return panel('Vials', 'What\u2019s left in each vial you\u2019re using. Tap one to start a new vial.', `<div class="vials">${items.map(({x, v}) => vialRow(x.c, v, false)).join('')}</div>`);
+}
+function vialRow(c, v, inSheet){
+{
+const pct = Math.round(v.pct * 100);
 const lvl = pct <= 20 ? 'low' : pct <= 50 ? 'mid' : 'ok';
 const mgTxt = `${num(+v.rem.toFixed(2))} of ${num(+v.vialMg.toFixed(2))} mg left`;
 const sub = v.runOut ? `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 new vial ${dayWord(v.runOut)}` : `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 lasts the rest of the cycle`;
@@ -571,23 +583,25 @@ const sizeBox = ed ? `<div class="vconfirm edit"><span class="label">New vial</s
 <span class="hint">A different size or mix changes syringe units for doses from this vial on. Your cycle stays the same.</span>
 <button class="link" data-act="rf-change" data-id="${c.id}">Keep current size</button></div>`
 : `<div class="vconfirm"><div><span class="label">New vial</span><b>${vdesc(c.vialMg, c.bacMl)}</b></div><button class="link" data-act="rf-change" data-id="${c.id}">Change</button></div>`;
-return `<div class="vialrow ${lvl}${on ? ' open' : ''}">
-<button type="button" class="vialhead" data-act="row" data-key="${key}" aria-expanded="${on}">
+const head = `
 <span class="vialmeter" aria-hidden="true"><span class="vm-fill" style="height:${pct}%"></span></span>
 <span class="vm-text"><span class="vm-name">${esc(c.name)}<span class="vm-pct">${pct}%</span></span>
 <span class="vm-bar"><span style="width:${pct}%"></span></span>
 <span class="vm-sub">${mgTxt} (${num(+v.mlLeft.toFixed(2))} mL)</span>
 <span class="vm-sub">${sub}</span></span>
-<span class="chev" aria-hidden="true">${on ? '\u25b4' : '\u25be'}</span></button>
-${on ? `<div class="refill">
+${inSheet ? '' : '<span class="chev" aria-hidden="true">\u203a</span>'}`;
+if (!inSheet) return `<div class="vialrow ${lvl}"><button type="button" class="vialhead" data-act="vsheet" data-id="${c.id}" aria-haspopup="dialog">${head}</button></div>`;
+return `<div class="vialrow ${lvl} insheet"><div class="vialhead">${head}</div></div>
+<h3 class="vs-title">Start a new vial</h3>
+<div class="refill">
 <div class="field"><label class="label" for="rf-${c.id}">New vial opened on</label><input id="rf-${c.id}" type="date" value="${iso(today())}"></div>
 ${sizeBox}
 <button class="btn" data-act="refill" data-id="${c.id}">Confirm new vial</button>
 <span class="hint">Current vial ${v.auto ? 'assumed opened' : 'opened'} ${fmt(v.opened)}${v.auto ? ' (when the last one ran out)' : ''}.</span>
 <div class="adjlist"><span class="label">Vials opened</span><div>${hist.join(' \u00b7 ')}</div></div>
 <span class="err" id="rf-err-${c.id}"></span>
-</div>` : ''}
-</div>`; }).join('')}</div>`);
+</div>`;
+}
 }
 function nxControls(c, o, where){
 const key = where + '|' + c.id, open = nxPick === key, min = iso(o.from);
@@ -1061,7 +1075,7 @@ renderDays();
 function setView(v, keepForm){
 if (v === 'add' && view !== 'add') prevView = view;
 if (v === 'add' && !keepForm) resetForm();
-view = v; cycId = null; adjustId = null; confirmId = null; sheetId = null;
+view = v; cycId = null; adjustId = null; confirmId = null; sheetId = null; vialSheetId = null;
 document.querySelectorAll('#nav [data-view]').forEach(b => b.toggleAttribute('aria-current', b.dataset.view === v));
 document.querySelectorAll('#nav [aria-current]').forEach(b => b.setAttribute('aria-current', 'page'));
 gate();
@@ -1097,6 +1111,8 @@ if (act === 'nx-stop'){ await saveCycle({...c, noRepeat: true}, 'err'); return; 
 } catch { b.disabled = false; msg(offMsg('Couldn\'t start the next round. Try again.')); }
 return;
 }
+if (b.dataset.act === 'vsheet'){ vialSheetId = b.dataset.id; vialFresh = true; rfEdit.delete(b.dataset.id); renderList(); return; }
+if (b.dataset.act === 'vsheet-close'){ vialSheetId = null; renderList(); return; }
 if (b.dataset.act === 'sheet'){ [expanded, collapsed, notesOpen].forEach(st => st.delete(b.dataset.id)); sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
@@ -1165,6 +1181,7 @@ const next = {...c, refills: [...old, {date: d, mg, ml}].sort((x, y) => x.date.l
 if (changed){ next.vial0 = c.vial0 || {mg: c.vialMg, ml: c.bacMl}; next.vialMg = mg; next.bacMl = ml; }
 rfEdit.delete(c.id);
 await saveCycle(next, 'rf-err-' + c.id);
+if ((cycles.find(x => x.id === c.id)?.refills || []).some(r => rDate(r) === d)){ vialSheetId = null; renderList(); }
 break;
 }
 case 'refill-rm': await saveCycle({...c, refills: (c.refills || []).filter(r => rDate(r) !== b.dataset.date)}, 'err'); break;
@@ -1425,7 +1442,7 @@ if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; renderList(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetId){ vialSheetId = null; renderList(); return; } if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; renderList(); } });
 // light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
 (function themeToggle(){
 const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;

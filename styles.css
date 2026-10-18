@@ -524,3 +524,14 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .uplist.bubbles .upday{grid-template-columns:4.2em minmax(0,1fr)}
 .upitem .q{flex-direction:row;align-items:baseline;gap:8px;flex-wrap:nowrap}.upitem .q b{font-weight:500;color:var(--ink)}.upitem .q .u{white-space:nowrap}
 .upitem .n{font-weight:600;font-size:.97rem}
+
+.vs-body{padding:0 22px 22px;display:flex;flex-direction:column;gap:14px}
+.vialrow.insheet{background:var(--sunken);border-radius:var(--r-md)}
+.vialrow.insheet .vialhead{cursor:default}
+.vs-title{margin:4px 0 0;font-size:1.15rem;font-weight:800}
+.vsheet .refill{padding:0;background:none}
+.vsheet .sheet-bar{height:52px}
+.vsheet input{background:var(--sunken);border:1px solid var(--line)}
+.vsheet .vconfirm{background:var(--sunken)}
+.vsheet .vconfirm input{background:var(--surface)}
+.vsheet .refill{border-top:none}
