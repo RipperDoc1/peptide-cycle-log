@@ -457,3 +457,18 @@ width:58px;height:58px;border-radius:50%;border:none;background:var(--surface);c
 .vialrow.low .vm-fill,.vialrow.low .vm-bar span{background:var(--danger)}
 .vialmeter{border-color:var(--muted)}.vialmeter::before{background:var(--muted)}
 .vialrow,.vials > *{border-radius:var(--r-md)}
+/* darker blue for buttons and selected states */
+:root{--sel:#2f5fb3; --sel-ink:#ffffff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--sel:#6f9ae6; --sel-ink:#0f1115}}
+:root[data-theme="dark"]{--sel:#6f9ae6; --sel-ink:#0f1115}
+.btn{background:var(--sel);color:var(--sel-ink)}
+.btn.ghost{background:var(--surface);color:var(--ink)}
+.day[aria-pressed="true"]{background:var(--sel);border-color:var(--sel);color:var(--sel-ink)}
+.quick .link.on{background:var(--sel);box-shadow:none;border-color:var(--sel);color:var(--sel-ink)}
+.nav button[aria-current]{background:var(--sel);color:var(--sel-ink)}
+.nav button[aria-current] svg{color:var(--sel-ink)}
+.detbtn[aria-expanded="true"],.upmore[aria-expanded="true"]{background:var(--sel);color:var(--sel-ink)}
+input[type="checkbox"],input[type="radio"]{accent-color:var(--sel)}
+.link{color:var(--sel)}
+.link.del{color:var(--danger)}
+.quick .link{color:var(--ink)}
