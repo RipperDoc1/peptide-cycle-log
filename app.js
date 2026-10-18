@@ -1581,12 +1581,14 @@ $('nav').hidden = !app; $('fab').hidden = !app || view === 'add';
 $('listSec').hidden = !app || view === 'add';
 $('form').hidden = !app || view !== 'add';
 const out = sessionUser ? `<button type="button" class="link" id="signOut">Sign out</button>` : '';
-if (profile){
-$('whoami').hidden = false;
-$('whoami').innerHTML = `@${esc(profile.telegram)}<button type="button" class="link" id="editProfile">Edit profile</button>${out}`;
-} else if (sessionUser){
-$('whoami').hidden = false; $('whoami').innerHTML = `${esc(sessionUser.email || '')}${out}`;
-} else $('whoami').hidden = true;
+$('whoami').hidden = true; void out;
+$('settingsBtn').hidden = !sessionUser;
+if (!sessionUser) $('settings').hidden = true;
+$('setName').textContent = profile ? profile.name : (sessionUser ? 'Signed in' : '');
+$('setTg').textContent = profile && profile.telegram ? '@' + profile.telegram : '';
+$('setEmail').textContent = sessionUser && sessionUser.email ? sessionUser.email : '';
+$('setInitial').textContent = ((profile && profile.name) || (sessionUser && sessionUser.email) || '?').trim().charAt(0).toUpperCase();
+$('editProfile').hidden = !profile;
 if (need){
 $('obTitle').textContent = profile ? 'Your profile' : 'Welcome';
 $('obSub').textContent = profile ? 'Update your name or Telegram username.' : 'Before you start, tell us who you are.';
@@ -1622,7 +1624,7 @@ const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">New fea
 <li><b>Timeline</b> view in All: pick a year to see the compounds used each month</li>
 <li><b>Share</b> a compound as a styled image with dose, frequency, dates and titration</li>
 <li><b>Share all</b> current compounds in one image from the Current tab</li>
-<li>Light/dark mode toggle (under the greeting)</li>
+<li>Settings (gear, top right) with your profile, sign out and light/dark mode</li>
 </ul>`;
 let wnShown = false;
 function maybeWhatsNew(){
@@ -1755,9 +1757,14 @@ finally { $('obSubmit').disabled = false; }
 });
 $('ob-tg').addEventListener('input', e => { if (e.target.value.startsWith('@')) e.target.value = e.target.value.replace(/^@+/, ''); });
 $('obCancel').onclick = () => { editingProfile = false; gate(); };
-document.querySelector('header').addEventListener('click', async e => {
-if (e.target.id === 'signOut'){ clearCache(); await sb.auth.signOut(); phase = 'loading'; view = 'home'; testers = null; return loadAll(); }
+const openSettings = on => { $('settings').hidden = !on; $('settings').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); };
+$('settingsBtn').addEventListener('click', () => openSettings(true));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('settings').hidden) openSettings(false); });
+document.addEventListener('click', async e => {
+if (e.target.closest('[data-set-close]')) return openSettings(false);
+if (e.target.id === 'signOut'){ openSettings(false); clearCache(); await sb.auth.signOut(); phase = 'loading'; view = 'home'; testers = null; return loadAll(); }
 if (e.target.id !== 'editProfile') return;
+openSettings(false);
 editingProfile = true;
 $('ob-name').value = profile.name; $('ob-tg').value = profile.telegram; $('obErr').textContent = '';
 gate(); $('ob-name').focus();
@@ -1781,11 +1788,16 @@ loadAll();
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetId){ vialSheetId = null; renderList(); return; } if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; adjConfirm = null; adjDraft = null; renderList(); } });
 // light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
 (function themeToggle(){
-const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+const stored = () => { try { return localStorage.getItem('pcl-theme'); } catch { return null; } };
 const cur = () => document.documentElement.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light');
-const sync = () => { const t = cur(); btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); btn.dataset.mode = t; const lb = btn.querySelector('.tlabel'); if (lb) lb.textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
-document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', t === 'dark' ? '#0f1115' : '#f3f3f6')); };
-btn.addEventListener('click', () => { const t = cur() === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('pcl-theme', t); } catch {} sync(); });
+const sync = () => { const pick = stored() === 'light' || stored() === 'dark' ? stored() : 'auto';
+document.querySelectorAll('[data-theme-set]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeSet === pick)));
+document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', cur() === 'dark' ? '#0f1115' : '#f3f3f6')); };
+document.addEventListener('click', e => { const b = e.target.closest('[data-theme-set]'); if (!b) return; const t = b.dataset.themeSet;
+if (t === 'auto'){ document.documentElement.removeAttribute('data-theme'); try { localStorage.removeItem('pcl-theme'); } catch {} }
+else { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('pcl-theme', t); } catch {} }
+sync(); });
 if (mq && mq.addEventListener) mq.addEventListener('change', sync);
 sync();
 })();

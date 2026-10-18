@@ -643,3 +643,24 @@ header .syncrow .sync{margin-top:0}
 .hright{top:-4px}
 @media (max-width:380px){.addcyc{font-size:.85rem;padding:0 13px 0 10px;height:40px}}
 .upitem .q b{white-space:nowrap}
+
+/* settings */
+.gear{width:44px;height:44px;border-radius:50%;border:1px solid var(--btn-line);background:var(--surface);color:var(--ink);display:grid;place-items:center;box-shadow:var(--shadow)}
+.gear svg{width:22px;height:22px}
+.addrow{display:flex;justify-content:flex-end;margin-bottom:-8px}
+.setwrap{z-index:46}
+.setsheet{max-width:420px}
+.set-body{padding:4px 24px 24px;display:flex;flex-direction:column;gap:18px}
+.set-body h2{margin:0;font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.set-user{display:flex;align-items:center;gap:14px;background:var(--sunken);border-radius:var(--r-md);padding:14px}
+.set-user > div{display:flex;flex-direction:column;min-width:0}
+.set-user b{font-size:1.1rem;font-weight:800}
+.set-user span{color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
+.set-avatar{width:48px;height:48px;border-radius:50%;background:var(--sel);color:var(--sel-ink);display:grid;place-items:center;font-weight:800;font-size:1.3rem;flex:0 0 auto}
+.set-group{display:flex;flex-direction:column;gap:8px}
+.themeseg{display:flex;width:100%}
+.themeseg button{flex:1 1 0;border:none;background:none;color:var(--ink);font-weight:600;padding:9px 8px;border-radius:999px}
+.themeseg button[aria-checked="true"]{background:var(--sel);color:var(--sel-ink)}
+.setitem{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--btn);border:1px solid var(--btn-line);color:var(--ink);font-weight:600;font-size:.98rem;padding:13px 16px;border-radius:var(--r-md)}
+.setitem span{color:var(--muted);font-size:1.3rem;line-height:1}
+.setitem.danger{color:var(--danger)}
