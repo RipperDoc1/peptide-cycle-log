@@ -45,6 +45,15 @@ const last = s.endedEarly ? addDays(parse(c.endedOn), -1) : s.end, from = addDay
 return {from, due, days: od, ready: due <= t, left: diff(t, due), elapsed: Math.min(Math.max(diff(from, t), 0), od),
 snoozed: !!(c.snoozeUntil && parse(c.snoozeUntil) > t)};
 }
+// what's missing on a cycle that would stop the app showing doses, units or vials
+function missing(c){
+const out = [];
+if (c.dose == null) out.push('No dose set');
+if (!(c.interval > 1) && !(c.days || []).length) out.push('No days selected');
+if ((c.vialMg > 0) !== (c.bacMl > 0)) out.push(c.premixed ? 'Vial size or concentration missing' : 'Vial size or BAC water missing');
+else if ((c.unit === 'units' || c.unit === 'mL') && c.dose != null && !(c.vialMg > 0 && c.bacMl > 0)) out.push(`Dose is in ${c.unit} but there is no vial info to work out mg`);
+return out;
+}
 let nxPick = null; // off-cycle item whose start-date picker is open
 const doseDay = (c, i, d) => c.interval > 1 ? i % c.interval === 0 : c.days.includes(d.getDay());
 const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
@@ -412,7 +421,10 @@ const alertBox = waiting.length ? `<section class="panel approvals"><div class="
 const ready = withStats.map(x => ({...x, o: offInfo(x.c, x.s)})).filter(x => x.o && x.o.ready && !x.o.snoozed);
 const readyBox = ready.map(({c, o}) => `<section class="panel readybox"><div class="phead"><div><h2>Ready to start ${esc(c.name)} again?</h2><p>Your ${offLabel(c)} off-cycle ${o.left === 0 ? 'ends today' : 'ended ' + fmt(o.due)}. The next round won’t start until you confirm.</p></div></div>
 <div class="pbody">${nxControls(c, o, 'home')}<div class="actions" style="margin-top:6px"><button class="link" data-act="nx-snooze" data-id="${c.id}">Not yet</button><button class="link del" data-act="nx-stop" data-id="${c.id}">Stop repeating</button></div></div></section>`).join('');
-list.innerHTML = alertBox + readyBox + panel('Today', todaySub, todayBody, badge)
+const needs = withStats.filter(x => x.s.status !== 'complete').map(x => ({c: x.c, m: missing(x.c)})).filter(x => x.m.length);
+const needBox = needs.length ? `<section class="panel attn" role="alert"><div class="phead"><div><h2>Needs attention</h2><p>${needs.length === 1 ? 'This compound is' : 'These compounds are'} missing information, so doses or vial counts can’t be shown.</p></div></div>
+<div class="pbody"><div class="attnlist">${needs.map(({c, m}) => `<div class="attnrow"><div><b>${esc(c.name)}</b><span>${m.join(' · ')}</span></div><button class="btn" data-act="edit" data-id="${c.id}">Fix</button></div>`).join('')}</div></div></section>` : '';
+list.innerHTML = alertBox + needBox + readyBox + panel('Today', todaySub, todayBody, badge)
 + panel('Upcoming', upMore ? 'Your scheduled doses for the next 7 days.' : 'Your scheduled doses for the next 3 days.', upBody)
 + vialsPanel(withStats.filter(x => x.s.status !== 'complete'), panel);
 return;

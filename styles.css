@@ -354,3 +354,12 @@ html.sheet-open, html.sheet-open body{overflow:hidden}
 .nav .addbtn{width:42px;height:42px;padding:0;border-radius:50%;font-size:1.4rem;line-height:1;display:grid;place-items:center}
 .nav .addbtn .lbl{display:none}
 }
+
+.panel.attn{border:1.5px solid var(--danger);background:color-mix(in srgb,var(--danger) 9%,var(--surface))}
+.panel.attn .phead{border-bottom-color:color-mix(in srgb,var(--danger) 25%,transparent)}
+.panel.attn h2{color:var(--danger)}
+.attnlist{display:flex;flex-direction:column;gap:10px}
+.attnrow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid color-mix(in srgb,var(--danger) 30%,var(--line));border-radius:var(--r-md);padding:12px 14px}
+.attnrow b{display:block;font-weight:600}
+.attnrow span{color:var(--danger);font-size:.88rem}
+.attnrow .btn{background:var(--danger);border-color:var(--danger);color:#fff;flex:0 0 auto}
