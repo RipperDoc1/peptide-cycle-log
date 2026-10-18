@@ -628,3 +628,17 @@ input:disabled,select:disabled{opacity:.5}
 .nmodeseg{display:flex;width:100%}.nmodeseg button{flex:1 1 0;white-space:nowrap;font-size:14px;padding:9px 8px}
 .form.nasal [hidden]{display:none!important}
 .nmodeseg button{border:none;background:none;color:var(--ink);font-weight:600;border-radius:999px}.nmodeseg button[aria-checked="true"]{background:var(--sel);color:var(--sel-ink)}
+
+/* add-new-cycle button, top right */
+.hright{flex-direction:row;align-items:center;gap:8px}
+.addcyc{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 16px 0 12px;border:none;border-radius:999px;background:var(--sel);color:var(--sel-ink);font-weight:700;font-size:.92rem;white-space:nowrap;box-shadow:var(--shadow)}
+.addcyc svg{width:20px;height:20px}
+.addcyc:active{transform:scale(.97)}
+.addcyc{order:2}
+
+.syncrow{display:flex;align-items:center;gap:12px;margin-top:6px;flex-wrap:wrap}
+header .syncrow .sync{margin-top:0}
+.themebtn{width:auto;height:auto;border-radius:999px;box-shadow:none;background:var(--btn);border:1px solid var(--btn-line);display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;font-size:.78rem;font-weight:600;color:var(--ink)}
+.themebtn svg{width:15px;height:15px}
+.hright{top:-4px}
+@media (max-width:380px){.addcyc{font-size:.85rem;padding:0 13px 0 10px;height:40px}}

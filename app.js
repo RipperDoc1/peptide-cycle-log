@@ -1620,7 +1620,7 @@ const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">New fea
 <li><b>Timeline</b> view in All: pick a year to see the compounds used each month</li>
 <li><b>Share</b> a compound as a styled image with dose, frequency, dates and titration</li>
 <li><b>Share all</b> current compounds in one image from the Current tab</li>
-<li>Light/dark mode toggle (top right)</li>
+<li>Light/dark mode toggle (under the greeting)</li>
 </ul>`;
 let wnShown = false;
 function maybeWhatsNew(){
@@ -1781,7 +1781,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetI
 (function themeToggle(){
 const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
 const cur = () => document.documentElement.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light');
-const sync = () => { const t = cur(); btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); btn.dataset.mode = t;
+const sync = () => { const t = cur(); btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); btn.dataset.mode = t; const lb = btn.querySelector('.tlabel'); if (lb) lb.textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
 document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', t === 'dark' ? '#0f1115' : '#f3f3f6')); };
 btn.addEventListener('click', () => { const t = cur() === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('pcl-theme', t); } catch {} sync(); });
 if (mq && mq.addEventListener) mq.addEventListener('change', sync);
