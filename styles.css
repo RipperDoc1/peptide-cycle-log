@@ -338,3 +338,19 @@ html.sheet-open, html.sheet-open body{overflow:hidden}
 .nav .sm{display:none}
 @media (max-width:560px){.nav .lg{display:none}.nav .sm{display:inline}.nav button{padding:7px 6px;font-size:.76rem}}
 @media (max-width:560px){.nav button{font-size:13px;padding:7px 5px}.nav{gap:0}}
+/* nav tabs as bubbles */
+.nav{flex-wrap:wrap;gap:8px;padding:8px;border-radius:22px;overflow:visible}
+.nav button{background:var(--sunken);border:1px solid var(--line);color:var(--ink);font-size:1rem;font-weight:600;padding:9px 16px;border-radius:999px}
+.nav button[aria-current]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.nav .addbtn{margin-left:auto}
+@media (max-width:560px){
+.nav{flex-wrap:wrap;gap:7px;padding:7px;justify-content:flex-start;overflow:visible}
+.nav button{font-size:15.5px;padding:9px 14px;flex:0 0 auto}
+.nav .lg{display:inline}.nav .sm{display:none}
+.nav .addbtn{position:static;margin-left:auto;width:auto;height:auto;padding:9px 16px;border-radius:999px;font-size:15.5px;box-shadow:none;display:inline-block}
+.nav .addbtn .lbl{display:inline}.nav .addbtn .full{display:none}
+}
+@media (max-width:560px){
+.nav .addbtn{width:42px;height:42px;padding:0;border-radius:50%;font-size:1.4rem;line-height:1;display:grid;place-items:center}
+.nav .addbtn .lbl{display:none}
+}

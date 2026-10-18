@@ -31,7 +31,7 @@ const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); retu
 const today = () => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
 const diff = (a,b) => Math.round((b - a) / 86400000);
 const fmt = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined});
-const num = n => Number.isInteger(n) ? String(n) : String(+n.toFixed(3));
+const num = n => n == null || isNaN(n) ? '—' : Number.isInteger(n) ? String(n) : String(+n.toFixed(3));
 const OPEN_AHEAD = 730;
 const isOpen = c => c.lenUnit === 'open';
 // dose day check: 'every other day' cycles count from the start (paused days don't count), others use weekdays
@@ -260,7 +260,7 @@ document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on',
 $('eodNote').hidden = !selEvery;
 }
 const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
-const doseWithUnits = (c, dv) => `${num(dv)} ${c.unit}${sec(c, dv) ? ` (${sec(c, dv)})` : ''}`;
+const doseWithUnits = (c, dv) => dv == null ? 'dose not set' : `${num(dv)} ${c.unit}${sec(c, dv) ? ` (${sec(c, dv)})` : ''}`;
 function todayBlock(c, s){
 const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} injections</span>` : '';
 if (s.status === 'paused')
