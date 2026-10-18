@@ -177,8 +177,10 @@
 <div class="field c3 nasalf"><label class="label" for="n-bottle">Bottle size (mL)</label><input id="n-bottle" type="number" min="0" step="any" inputmode="decimal" value="10"></div>
 <div class="field c3 nasalf"><label class="label" for="n-spray">Each spray (mL)</label><input id="n-spray" type="number" min="0" step="any" inputmode="decimal" value="0.1"></div>
 <div class="field c3 nasalf"><label class="label" for="n-mg">Peptide in bottle (mg)</label><input id="n-mg" type="number" min="0" step="any" inputmode="decimal" placeholder="Optional"><span class="hint">Needed to set the dose in mcg.</span></div>
-<div class="field c3 nasalf"><label class="label" for="n-sprays">Sprays per nostril</label><input id="n-sprays" type="number" min="1" step="1" inputmode="numeric" value="1"></div>
-<div class="field c6 nasalf"><label class="label" for="n-mcg">Or enter the dose you want (mcg)</label><div class="inline unitsrow"><input id="n-mcg" type="number" min="0" step="any" inputmode="decimal" placeholder="Add peptide in bottle first" disabled><span class="suffix">mcg</span></div><span class="hint" id="n-mcgnote">Type sprays per nostril or a mcg dose. The other one updates.</span></div>
+<div class="field c6 nasalf"><span class="label" id="nModeLabel">Set the dose by</span>
+<div class="seg nmodeseg" role="radiogroup" aria-labelledby="nModeLabel"><button type="button" role="radio" data-nmode="sprays" aria-checked="true">Sprays per nostril</button><button type="button" role="radio" data-nmode="mcg" aria-checked="false">mcg dose</button></div></div>
+<div class="field c6 nasalf" id="nSpraysField"><label class="label" for="n-sprays">Sprays per nostril</label><input id="n-sprays" type="number" min="1" step="1" inputmode="numeric" value="1"></div>
+<div class="field c6 nasalf" id="nMcgField" hidden><label class="label" for="n-mcg">Desired dose (mcg)</label><div class="inline unitsrow"><input id="n-mcg" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 250"><span class="suffix">mcg</span></div><span class="hint" id="n-mcgnote"></span></div>
 <div class="calc c6 nasalf" id="nasalCalc" aria-live="polite"></div>
 <label class="toggle c6 inj" for="f-tit"><input type="checkbox" id="f-tit"> <span><strong>Titrate dose</strong><span class="hint">One line per dose change. Each line sets the dose from that week or date until the next line.</span></span></label>
 <div class="titbox c6 inj" id="titBox" hidden>

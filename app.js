@@ -69,7 +69,7 @@ $('form').classList.toggle('nasal', n);
 document.querySelectorAll('[data-route]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.route === selRoute)));
 $('perdayLabel').textContent = n ? 'Times per day' : 'Doses per day';
 $('perdayHint').textContent = n ? 'How many times a day you spray.' : 'The dose above is per injection.';
-nasalSync('sprays'); updateNasal();
+nasalSync(); updateNasal();
 }
 function updateNasal(){
 const el = $('nasalCalc'); if (!el || selRoute !== 'nasal') return;
@@ -82,25 +82,24 @@ const mgTx = m => m < 1 ? `${num(+(m * 1000).toFixed(1))} mcg` : `${num(+m.toFix
 el.innerHTML = `<div>Each dose: <b>${n * 2} spray${n * 2 === 1 ? '' : 's'}</b> (${n} per nostril) = <b>${num(+doseMl.toFixed(3))} mL</b>${conc ? ` = <b>${mgTx(doseMl * conc)}</b>` : ''}</div>
 <div>One ${num(bottle)} mL bottle ≈ <b>${doses} dose${doses === 1 ? '' : 's'}</b>${lasts ? `, about <b>${lasts}</b> at this schedule` : ''}.</div>`;
 }
-// sprays per nostril <-> mcg dose (needs the mg in the bottle); sprays are whole numbers, so a typed mcg dose rounds to the nearest spray
+// nasal dose: set by sprays per nostril (default) or by a desired mcg dose; sprays are whole, so a mcg dose rounds UP to the next full spray
+let nasMode = 'sprays';
 function nasalMcgPerSpray(){ const bottle = parseFloat($('n-bottle').value), sp = parseFloat($('n-spray').value), mg = parseFloat($('n-mg').value); return bottle > 0 && sp > 0 && mg > 0 ? mg / bottle * sp * 1000 : null; }
-function nasalSync(from){
-const per = nasalMcgPerSpray(), mcgEl = $('n-mcg'), note = $('n-mcgnote');
-mcgEl.disabled = per == null; mcgEl.placeholder = per == null ? 'Add peptide in bottle first' : 'e.g. 200';
-if (per == null){ if (from !== 'mcg') mcgEl.value = ''; note.textContent = 'Add the mg in the bottle to set the dose in mcg.'; return; }
-if (from === 'mcg'){
-const want = parseFloat(mcgEl.value);
-if (!(want > 0)){ note.textContent = `Each spray = ${num(+per.toFixed(1))} mcg.`; return; }
-const exact = want / per / 2, n = Math.max(1, Math.round(exact));
+function nasalSync(){
+document.querySelectorAll('[data-nmode]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.nmode === nasMode)));
+$('nSpraysField').hidden = nasMode !== 'sprays'; $('nMcgField').hidden = nasMode !== 'mcg';
+if (nasMode !== 'mcg') return;
+const per = nasalMcgPerSpray(), note = $('n-mcgnote'), want = parseFloat($('n-mcg').value);
+if (per == null){ note.textContent = 'Enter the peptide in the bottle (mg) above so the sprays can be worked out.'; return; }
+if (!(want > 0)){ note.textContent = 'The app works out the sprays per nostril.'; return; }
+const n = Math.max(1, Math.ceil(want / per / 2 - 1e-9)), actual = n * 2 * per;
 $('n-sprays').value = n;
-note.textContent = Math.abs(exact - n) < 0.01 ? `= ${n} spray${n === 1 ? '' : 's'} per nostril (each spray ${num(+per.toFixed(1))} mcg).` : `${num(+exact.toFixed(2))} sprays per nostril isn't possible, so it's rounded to ${n} = ${num(+(n * 2 * per).toFixed(1))} mcg per dose.`;
-} else {
-const n = parseInt($('n-sprays').value, 10);
-if (n > 0) mcgEl.value = +(n * 2 * per).toFixed(1);
-note.textContent = `Each spray = ${num(+per.toFixed(1))} mcg. Type a mcg dose to work out the sprays.`;
+note.innerHTML = `= <b>${n} spray${n === 1 ? '' : 's'} per nostril</b>${Math.abs(actual - want) > 0.05 ? ` (rounded up to full sprays: ${num(+actual.toFixed(1))} mcg per dose)` : ''}`;
 }
-}
-document.addEventListener('input', e => { if (e.target.id === 'n-mcg') { nasalSync('mcg'); updateNasal(); } else if (['n-sprays', 'n-mg', 'n-bottle', 'n-spray'].includes(e.target.id)) nasalSync('sprays'); });
+document.addEventListener('click', e => { const b = e.target.closest('[data-nmode]'); if (!b) return; nasMode = b.dataset.nmode;
+if (nasMode === 'mcg' && !$('n-mcg').value){ const per = nasalMcgPerSpray(), n = parseInt($('n-sprays').value, 10); if (per && n > 0) $('n-mcg').value = +(n * 2 * per).toFixed(1); }
+nasalSync(); updateNasal(); });
+document.addEventListener('input', e => { if (['n-mcg', 'n-mg', 'n-bottle', 'n-spray'].includes(e.target.id)) { nasalSync(); updateNasal(); } });
 document.addEventListener('click', e => { const b = e.target.closest('[data-route]'); if (!b) return; selRoute = b.dataset.route; syncRoute(); });
 ['n-bottle', 'n-spray', 'n-sprays', 'n-mg', 'f-perday'].forEach(id => document.addEventListener('input', e => { if (e.target.id === id) updateNasal(); }));
 document.addEventListener('change', e => { if (e.target.id === 'f-perday') updateNasal(); });
@@ -991,7 +990,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; syncRoute();
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; syncRoute();
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -1005,8 +1004,8 @@ $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep();
 selRoute = routeOf(c);
-if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; }
-else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; } syncLen();
+if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; nasMode = c.nasMode === 'mcg' ? 'mcg' : 'sprays'; $('n-mcg').value = c.nasMcg > 0 ? c.nasMcg : ''; }
+else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; } syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
 selDays = new Set(c.days); selEvery = c.interval > 1 ? c.interval : 0; renderDays();
 $('f-premix').checked = !!c.premixed;
@@ -1052,9 +1051,11 @@ if (nasal){
 const bottle = parseFloat($('n-bottle').value), sp = parseFloat($('n-spray').value), n = parseInt($('n-sprays').value, 10), mgRaw = $('n-mg').value.trim(), mg = parseFloat(mgRaw);
 if (!(bottle > 0)) return $('err').textContent = 'Enter the bottle size in mL.';
 if (!(sp > 0)) return $('err').textContent = 'Enter how many mL each spray delivers.';
+if (nasMode === 'mcg' && !(mg > 0)) return $('err').textContent = 'Enter the peptide in the bottle (mg) to set the dose in mcg.';
+if (nasMode === 'mcg' && !(parseFloat($('n-mcg').value) > 0)) return $('err').textContent = 'Enter the dose you want in mcg.';
 if (!(n > 0)) return $('err').textContent = 'Enter sprays per nostril (at least 1).';
 if (mgRaw !== '' && !(mg > 0)) return $('err').textContent = 'Peptide in bottle must be a number, or leave it blank.';
-nas = {route: 'nasal', spMl: sp, unit: 'mL', dose: +(n * 2 * sp).toFixed(6), bacMl: bottle, vialMg: mg > 0 ? mg : null, premixed: true, titrate: false, plan: []};
+nas = {route: 'nasal', nasMode, nasMcg: nasMode === 'mcg' ? parseFloat($('n-mcg').value) : null, spMl: sp, unit: 'mL', dose: +(n * 2 * sp).toFixed(6), bacMl: bottle, vialMg: mg > 0 ? mg : null, premixed: true, titrate: false, plan: []};
 }
 const fv = formVial(), premixed = $('f-premix').checked;
 if (!nasal && fv.partial) return $('err').textContent = premixed ? 'Enter both the vial size in mL and the concentration, or leave both blank.' : 'Enter both vial size and BAC water, or leave both blank.';
