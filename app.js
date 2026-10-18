@@ -50,12 +50,61 @@ function missing(c){
 const out = [];
 if (c.dose == null) out.push('No dose set');
 if (!(c.interval > 1) && !(c.days || []).length) out.push('No days selected');
+if (isNasal(c)){ if (!(c.bacMl > 0) || !(c.spMl > 0)) out.push('Bottle size or spray volume missing'); return out; }
 if ((c.vialMg > 0) !== (c.bacMl > 0)) out.push(c.premixed ? 'Vial size or concentration missing' : 'Vial size or BAC water missing');
 else if ((c.unit === 'units' || c.unit === 'mL') && c.dose != null && !(c.vialMg > 0 && c.bacMl > 0)) out.push(`Dose is in ${c.unit} but there is no vial info to work out mg`);
 return out;
 }
 let nxPick = null;
 let dupAck = null;
+// delivery route: subcutaneous / intramuscular / nasal. Nasal doses are stored as mL (sprays x 2 nostrils x mL per spray).
+let selRoute = 'subq';
+const ROUTES = {subq: ['SubQ', 'Subcutaneous'], im: ['IM', 'Intramuscular'], nasal: ['Nasal', 'Nasal spray']};
+const routeOf = c => ROUTES[c.route] ? c.route : 'subq';
+const isNasal = c => c.route === 'nasal';
+const spraysOf = (c, dv) => c.spMl > 0 ? +(dv / (2 * c.spMl)).toFixed(2) : null;
+function syncRoute(){
+const n = selRoute === 'nasal';
+$('form').classList.toggle('nasal', n);
+document.querySelectorAll('[data-route]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.route === selRoute)));
+$('perdayLabel').textContent = n ? 'Times per day' : 'Doses per day';
+$('perdayHint').textContent = n ? 'How many times a day you spray.' : 'The dose above is per injection.';
+nasalSync('sprays'); updateNasal();
+}
+function updateNasal(){
+const el = $('nasalCalc'); if (!el || selRoute !== 'nasal') return;
+const bottle = parseFloat($('n-bottle').value), sp = parseFloat($('n-spray').value), n = parseInt($('n-sprays').value, 10), mg = parseFloat($('n-mg').value), per = parseInt($('f-perday').value, 10) || 1;
+if (!(bottle > 0 && sp > 0 && n > 0)){ el.innerHTML = '<span class="hint">Enter the bottle size, spray volume and sprays per nostril.</span>'; return; }
+const doseMl = n * 2 * sp, doses = Math.floor(bottle / doseMl + 1e-9), perWeek = (selEvery ? 3.5 : selDays.size) * per;
+const weeks = perWeek ? doses / perWeek : 0, conc = mg > 0 ? mg / bottle : null;
+const lasts = !perWeek ? '' : weeks < 2 ? `${Math.round(weeks * 7)} days` : `${+weeks.toFixed(1)} weeks`;
+const mgTx = m => m < 1 ? `${num(+(m * 1000).toFixed(1))} mcg` : `${num(+m.toFixed(3))} mg`;
+el.innerHTML = `<div>Each dose: <b>${n * 2} spray${n * 2 === 1 ? '' : 's'}</b> (${n} per nostril) = <b>${num(+doseMl.toFixed(3))} mL</b>${conc ? ` = <b>${mgTx(doseMl * conc)}</b>` : ''}</div>
+<div>One ${num(bottle)} mL bottle ≈ <b>${doses} dose${doses === 1 ? '' : 's'}</b>${lasts ? `, about <b>${lasts}</b> at this schedule` : ''}.</div>`;
+}
+// sprays per nostril <-> mcg dose (needs the mg in the bottle); sprays are whole numbers, so a typed mcg dose rounds to the nearest spray
+function nasalMcgPerSpray(){ const bottle = parseFloat($('n-bottle').value), sp = parseFloat($('n-spray').value), mg = parseFloat($('n-mg').value); return bottle > 0 && sp > 0 && mg > 0 ? mg / bottle * sp * 1000 : null; }
+function nasalSync(from){
+const per = nasalMcgPerSpray(), mcgEl = $('n-mcg'), note = $('n-mcgnote');
+mcgEl.disabled = per == null; mcgEl.placeholder = per == null ? 'Add peptide in bottle first' : 'e.g. 200';
+if (per == null){ if (from !== 'mcg') mcgEl.value = ''; note.textContent = 'Add the mg in the bottle to set the dose in mcg.'; return; }
+if (from === 'mcg'){
+const want = parseFloat(mcgEl.value);
+if (!(want > 0)){ note.textContent = `Each spray = ${num(+per.toFixed(1))} mcg.`; return; }
+const exact = want / per / 2, n = Math.max(1, Math.round(exact));
+$('n-sprays').value = n;
+note.textContent = Math.abs(exact - n) < 0.01 ? `= ${n} spray${n === 1 ? '' : 's'} per nostril (each spray ${num(+per.toFixed(1))} mcg).` : `${num(+exact.toFixed(2))} sprays per nostril isn't possible, so it's rounded to ${n} = ${num(+(n * 2 * per).toFixed(1))} mcg per dose.`;
+} else {
+const n = parseInt($('n-sprays').value, 10);
+if (n > 0) mcgEl.value = +(n * 2 * per).toFixed(1);
+note.textContent = `Each spray = ${num(+per.toFixed(1))} mcg. Type a mcg dose to work out the sprays.`;
+}
+}
+document.addEventListener('input', e => { if (e.target.id === 'n-mcg') { nasalSync('mcg'); updateNasal(); } else if (['n-sprays', 'n-mg', 'n-bottle', 'n-spray'].includes(e.target.id)) nasalSync('sprays'); });
+document.addEventListener('click', e => { const b = e.target.closest('[data-route]'); if (!b) return; selRoute = b.dataset.route; syncRoute(); });
+['n-bottle', 'n-spray', 'n-sprays', 'n-mg', 'f-perday'].forEach(id => document.addEventListener('input', e => { if (e.target.id === id) updateNasal(); }));
+document.addEventListener('change', e => { if (e.target.id === 'f-perday') updateNasal(); });
+document.addEventListener('click', e => { if (e.target.closest('.day,[data-preset]')) setTimeout(updateNasal); });
 // change-dose helpers: enter the new dose in the cycle's unit or the other one (mg <-> syringe units), then confirm
 let adjMode = null, adjDraft = null, adjConfirm = null;
 const concOf = c => c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
@@ -156,8 +205,9 @@ const len = isOpen(c) ? 'Ongoing' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.
 const wk = (a, b) => { const x = Math.floor(a / 7) + 1, y = Math.floor(b / 7) + 1; return x === y ? `Week ${x}` : `Weeks ${x}–${y}`; };
 const steps = s.steps.length > 1 ? s.steps.map((st, i) => ({when: isOpen(c) && i === s.steps.length - 1 ? `Week ${Math.floor(st.from / 7) + 1} onward` : wk(st.from, st.to), dose: `${num(st.dose)} ${c.unit}`, extra: sec(c, st.dose)})) : [];
 const status = s.status === 'upcoming' ? `Starts ${fmtY(s.start)}` : s.status === 'paused' ? 'Paused' : isOpen(c) ? `Day ${Math.max(s.elapsed, 0)} · ongoing` : `Day ${Math.max(s.elapsed, 0)} of ${s.span}`;
-return {name: c.name, status, statusKey: s.status, dose: dose != null ? `${num(dose)} ${c.unit}` : 'Dose not set', doseSub: [sec(c, dose) ? `${sec(c, dose)} per injection` : (dose != null ? 'per injection' : ''), per > 1 ? `${per}× a day` : ''].filter(Boolean).join(' · '),
-rows: [['Frequency', daysText(c) + (per > 1 ? ` · ${per}× a day` : '')], ['Start', fmtY(s.start)], ['End', s.endedEarly ? fmtY(parse(c.endedOn)) : isOpen(c) ? 'Indefinite' : fmtY(s.end)], ['Length', len]].concat(offDaysOf(c) ? [['Off-cycle after', `${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'week' : 'weeks')}`]] : []),
+const dp = dosePair(c, dose), nas = isNasal(c);
+return {name: c.name, status, statusKey: s.status, dose: nas && dose != null ? dp.main + ' per nostril' : dp.main, doseSub: [dose == null ? '' : nas ? dp.sub.replace(/^per nostril \u00b7 /, '') : (dp.sub ? `${dp.sub} per injection` : 'per injection'), per > 1 ? `${per}× a day` : ''].filter(Boolean).join(' · '),
+rows: [['Route', ROUTES[routeOf(c)][1]], ['Frequency', daysText(c) + (per > 1 ? ` · ${per}× a day` : '')], ['Start', fmtY(s.start)], ['End', s.endedEarly ? fmtY(parse(c.endedOn)) : isOpen(c) ? 'Indefinite' : fmtY(s.end)], ['Length', len]].concat(offDaysOf(c) ? [['Off-cycle after', `${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'week' : 'weeks')}`]] : []),
 steps};
 }
 async function shareCycle(c){
@@ -258,8 +308,8 @@ ctx.font = F(700, 24); const pw = ctx.measureText(x.status).width + 50;
 const nameLines = wrap(x.name, F(800, 44), IW - pw - 16);
 const doseLine = x.dose + (x.doseSub ? '  ·  ' + x.doseSub : '');
 const doseLines = wrap(doseLine, F(700, 32), IW);
-const dates = `${x.rows[1][1]} – ${x.rows[2][1]}`;
-const info = [['Frequency', x.rows[0][1]], ['Dates', dates]].concat(x.rows[4] ? [['Off-cycle', x.rows[4][1] + ' after']] : []);
+const dates = `${x.rows[2][1]} – ${x.rows[3][1]}`;
+const info = [['Route', x.rows[0][1]], ['Frequency', x.rows[1][1]], ['Dates', dates]].concat(x.rows[5] ? [['Off-cycle', x.rows[5][1] + ' after']] : []);
 const infoLines = info.map(([k, v]) => ({k, v: wrap(v, F(600, 28), IW - 190)}));
 const titLines = x.steps.length ? wrap('Titration: ' + x.steps.map(st => `${st.when.replace('Weeks', 'Wk').replace('Week', 'Wk')} ${st.dose}`).join('  →  '), F(500, 26), IW) : [];
 const th = IP + nameLines.length * 52 + 14 + doseLines.length * 42 + 16 + infoLines.reduce((a, r) => a + r.v.length * 38 + 6, 0) + (titLines.length ? 10 + titLines.length * 34 : 0) + IP - 10;
@@ -284,7 +334,7 @@ const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, C.bg1); g.addC
 ctx.save(); ctx.shadowColor = 'rgba(20,30,50,.10)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 12; ctx.fillStyle = C.card; rr(P, P, CW, bottom - P, 48); ctx.fill(); ctx.restore();
 paint(true);
 ctx.font = F(500, 26); ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.fillText('Shared from Peptide Log', W / 2, H - 40);
-const text = [`My current protocol (as of ${asOf})`, ''].concat(...items.map(({x}) => [`${x.name} — ${x.status}`, `  Dose: ${x.dose}${x.doseSub ? ' (' + x.doseSub + ')' : ''}`, `  Frequency: ${x.rows[0][1]}`, `  Dates: ${x.rows[1][1]} – ${x.rows[2][1]}`, ...(x.steps.length ? ['  Titration: ' + x.steps.map(st => `${st.when} ${st.dose}`).join(', ')] : []), ''])).join('\n');
+const text = [`My current protocol (as of ${asOf})`, ''].concat(...items.map(({x}) => [`${x.name} — ${x.status}`, `  Dose: ${x.dose}${x.doseSub ? ' (' + x.doseSub + ')' : ''}`, `  Route: ${x.rows[0][1]}`, `  Frequency: ${x.rows[1][1]}`, `  Dates: ${x.rows[2][1]} – ${x.rows[3][1]}`, ...(x.steps.length ? ['  Titration: ' + x.steps.map(st => `${st.when} ${st.dose}`).join(', ')] : []), ''])).join('\n');
 const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
 return deliver(blob, 'current-protocol.png', text);
 }
@@ -432,6 +482,9 @@ return mg / (c.vialMg / c.bacMl) * 100;
 const rDate = r => typeof r === 'string' ? r : r.date;
 const rfEdit = new Set(); // vial rows where the new-vial size is being changed
 function vialStatus(c){
+// nasal bottle without a known mg amount: track it by mL instead (treat 1 mL as one unit of "mg")
+const byMl = isNasal(c) && !(c.vialMg > 0) && c.bacMl > 0;
+if (byMl) c = {...c, vialMg: c.bacMl, refills: (c.refills || []).map(r => typeof r === 'object' ? {...r, mg: r.ml} : r), vial0: c.vial0 ? {mg: c.vial0.ml, ml: c.vial0.ml} : null};
 if (!(c.vialMg > 0) || !(c.bacMl > 0) || c.dose == null || mgOf(c, 1) == null) return null;
 const sched = schedule(c), days = new Set(c.days), per = c.perDay || 1, t = today(), conc = c.vialMg / c.bacMl;
 // each vial keeps its own size/mix: the first one from vial0 (if the size was ever changed), later ones from their refill entry
@@ -458,7 +511,7 @@ const mg = mgIn(dv);
 for (let k = 0; k < per; k++){ if (mg > r2 + 1e-9){ runOut = d; break outer; } r2 -= mg; left++; }
 }
 rem = Math.max(rem, 0);
-return {rem, pct: rem / vial.mg, opened, auto, dosesLeft: left, runOut, mlLeft: rem / (vial.mg / vial.ml), conc: vial.mg / vial.ml, vialMg: vial.mg, vialMl: vial.ml};
+return {rem, pct: rem / vial.mg, opened, auto, dosesLeft: left, runOut, mlLeft: rem / (vial.mg / vial.ml), conc: vial.mg / vial.ml, vialMg: vial.mg, vialMl: vial.ml, byMl};
 }
 // the other way to read a dose: syringe units for mg/mcg, mg for units, mg + units for mL
 function sec(c, dose){
@@ -538,6 +591,10 @@ const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : 
 // dose for display, always mg first when it can be worked out (units / mL doses show mg, then the amount entered)
 function dosePair(c, dv){
 if (dv == null) return {main: 'Dose not set', sub: ''};
+if (isNasal(c) && c.spMl > 0){
+const n = spraysOf(c, dv), mg = c.vialMg > 0 && c.bacMl > 0 ? dv * c.vialMg / c.bacMl : null;
+return {main: `${num(n)} spray${n === 1 ? '' : 's'}`, sub: `per nostril \u00b7 ${num(+dv.toFixed(3))} mL${mg != null ? ' \u00b7 ' + (mg < 1 ? num(+(mg * 1000).toFixed(1)) + ' mcg' : num(+mg.toFixed(3)) + ' mg') : ''}`};
+}
 const mg = mgOf(c, dv);
 if ((c.unit === 'units' || c.unit === 'mL') && mg != null){
 const un = unitsFor(c, dv);
@@ -547,7 +604,7 @@ return {main: `${num(dv)} ${c.unit}`, sub: sec(c, dv)};
 }
 const doseWithUnits = (c, dv) => { if (dv == null) return 'dose not set'; const d = dosePair(c, dv); return d.main + (d.sub ? ` (${d.sub})` : ''); };
 function todayBlock(c, s){
-const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} injections</span>` : '';
+const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} ${isNasal(c) ? 'times a day' : 'injections'}</span>` : '';
 if (s.status === 'paused')
 return `<div class="today paused"><span class="label">Paused</span><div class="big">Paused since ${fmt(parse(s.openPause.from))}</div><span class="tx">No doses until you resume. Use Pause/End Cycle to resume.</span></div>`;
 if (s.status === 'complete')
@@ -670,7 +727,7 @@ const coming = withStats.filter(x => x.s.status === 'upcoming');
 const due = running.filter(x => x.s.doseToday != null);
 const inj = due.reduce((n, x) => n + (x.c.perDay || 1), 0);
 const todaySub = !cycles.length ? 'Your daily doses appear here.'
-: due.length ? `${due.length} peptide${due.length > 1 ? 's' : ''} due today · ${inj} injection${inj > 1 ? 's' : ''}`
+: due.length ? `${due.length} peptide${due.length > 1 ? 's' : ''} due today · ${inj} dose${inj > 1 ? 's' : ''}`
 : 'Your daily doses appear here.';
 const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
@@ -797,26 +854,30 @@ function vialRow(c, v, inSheet){
 {
 const pct = Math.round(v.pct * 100);
 const lvl = pct <= 20 ? 'low' : pct <= 50 ? 'mid' : 'ok';
-const mgTxt = `${num(+v.rem.toFixed(2))} of ${num(+v.vialMg.toFixed(2))} mg left`;
-const sub = v.runOut ? `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 new vial ${dayWord(v.runOut)}` : `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 lasts the rest of the cycle`;
-const vdesc = (mg, ml) => c.premixed ? `${num(+ml.toFixed(3))} mL at ${num(+(mg / ml).toFixed(3))} mg/mL (${num(+mg.toFixed(3))} mg)` : `${num(+mg.toFixed(3))} mg + ${num(+ml.toFixed(3))} mL BAC water`;
+const nasal = isNasal(c), sprLeft = nasal && c.spMl > 0 ? Math.floor(v.mlLeft / c.spMl + 1e-9) : null;
+const mgTxt = nasal ? `${num(+v.mlLeft.toFixed(2))} of ${num(+v.vialMl.toFixed(2))} mL left${!v.byMl ? ' · ' + num(+v.rem.toFixed(2)) + ' mg' : ''}` : `${num(+v.rem.toFixed(2))} of ${num(+v.vialMg.toFixed(2))} mg left`;
+const sub = v.runOut ? `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 new ${isNasal(c) ? "bottle" : "vial"} ${dayWord(v.runOut)}` : `${v.dosesLeft} dose${v.dosesLeft === 1 ? '' : 's'} left \u00b7 lasts the rest of the cycle`;
+const vdesc = (mg, ml) => isNasal(c) ? `${num(+ml.toFixed(3))} mL bottle${mg > 0 ? ' · ' + num(+mg.toFixed(3)) + ' mg' : ''}` : c.premixed ? `${num(+ml.toFixed(3))} mL at ${num(+(mg / ml).toFixed(3))} mg/mL (${num(+mg.toFixed(3))} mg)` : `${num(+mg.toFixed(3))} mg + ${num(+ml.toFixed(3))} mL BAC water`;
 const sizeTag = r => typeof r === 'object' && r.mg > 0 && (r.mg !== c.vialMg || r.ml !== c.bacMl) ? ` (${c.premixed ? num(+r.ml.toFixed(3)) + ' mL' : num(+r.mg.toFixed(3)) + ' mg'})` : '';
 const hist = [`${fmt(parse(c.start))} (start${c.vial0 && (c.vial0.mg !== c.vialMg || c.vial0.ml !== c.bacMl) ? ', ' + (c.premixed ? num(+c.vial0.ml.toFixed(3)) + ' mL' : num(+c.vial0.mg.toFixed(3)) + ' mg') : ''})`, ...(c.refills || []).slice().sort((a, b) => rDate(a).localeCompare(rDate(b))).map(r => `${fmt(parse(rDate(r)))}${sizeTag(r)} <button class="link del" data-act="refill-rm" data-id="${c.id}" data-date="${rDate(r)}">remove</button>`)];
 const ed = rfEdit.has(c.id);
 const sizeBox = ed ? `<div class="vconfirm edit"><span class="label">New vial</span>
-<div class="vcgrid">${c.premixed
+<div class="vcgrid">${isNasal(c)
+? `<div class="field"><label class="label" for="rf-a-${c.id}">Bottle size (mL)</label><input id="rf-a-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.bacMl.toFixed(4)}"></div>
+<div class="field"><label class="label" for="rf-b-${c.id}">Peptide in bottle (mg)</label><input id="rf-b-${c.id}" type="number" min="0" step="any" inputmode="decimal" placeholder="Optional" value="${c.vialMg > 0 ? +c.vialMg.toFixed(4) : ''}"></div>`
+: c.premixed
 ? `<div class="field"><label class="label" for="rf-a-${c.id}">Vial size (mL)</label><input id="rf-a-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.bacMl.toFixed(4)}"></div>
 <div class="field"><label class="label" for="rf-b-${c.id}">Concentration (mg/mL)</label><input id="rf-b-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+(c.vialMg / c.bacMl).toFixed(4)}"></div>`
 : `<div class="field"><label class="label" for="rf-a-${c.id}">Vial size (mg)</label><input id="rf-a-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.vialMg.toFixed(4)}"></div>
 <div class="field"><label class="label" for="rf-b-${c.id}">BAC water (mL)</label><input id="rf-b-${c.id}" type="number" min="0" step="any" inputmode="decimal" value="${+c.bacMl.toFixed(4)}"></div>`}</div>
 <span class="hint">A different size or mix changes syringe units for doses from this vial on. Your cycle stays the same.</span>
 <button class="link" data-act="rf-change" data-id="${c.id}">Keep current size</button></div>`
-: `<div class="vconfirm"><div><span class="label">New vial</span><b>${vdesc(c.vialMg, c.bacMl)}</b></div><button class="link" data-act="rf-change" data-id="${c.id}">Change</button></div>`;
+: `<div class="vconfirm"><div><span class="label">New vial</span><b>${vdesc(c.vialMg || 0, c.bacMl)}</b></div><button class="link" data-act="rf-change" data-id="${c.id}">Change</button></div>`;
 const head = `
 <span class="vialmeter" aria-hidden="true"><span class="vm-fill" style="height:${pct}%"></span></span>
 <span class="vm-text"><span class="vm-name">${esc(c.name)}<span class="vm-pct">${pct}%</span></span>
 <span class="vm-bar"><span style="width:${pct}%"></span></span>
-<span class="vm-sub">${mgTxt} (${num(+v.mlLeft.toFixed(2))} mL)</span>
+<span class="vm-sub">${nasal ? mgTxt + (sprLeft != null ? ` · ${sprLeft} sprays` : '') : `${mgTxt} (${num(+v.mlLeft.toFixed(2))} mL)`}</span>
 <span class="vm-sub">${sub}</span></span>
 ${inSheet ? '' : '<span class="chev" aria-hidden="true">\u203a</span>'}`;
 if (!inSheet) return `<div class="vialrow ${lvl}"><button type="button" class="vialhead" data-act="vsheet" data-id="${c.id}" aria-haspopup="dialog">${head}</button></div>`;
@@ -868,7 +929,7 @@ const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
 return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
-${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${dosePair(c, s.doseToday).main}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}${per > 1 ? ` <span class="bu">\u00d7 ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
+${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}${per > 1 ? ` <span class="bu">\u00d7 ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
 <span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 function card({c, s}, open){
@@ -895,7 +956,7 @@ ${alt ? `<div class="seg adjseg" role="tablist" aria-label="Enter dose in" style
 <div class="actions"><button class="btn" data-act="chg-save" data-id="${c.id}">Save dose change</button><button class="btn ghost" data-act="chg-cancel">Cancel</button><span class="err" id="a-err"></span></div>
 </div>` : '';
 const on = x => x ? ' on' : '';
-const acts = `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link${on(adjustId === c.id)}" data-act="chg" data-id="${c.id}" aria-pressed="${adjustId === c.id}">Change dose</button>` : ''}<button class="link${on(cycId === c.id)}" data-act="cy" data-id="${c.id}" aria-pressed="${cycId === c.id}">Pause/End Cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit Cycle</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del${on(confirmId === c.id)}" data-act="del" data-id="${c.id}" aria-pressed="${confirmId === c.id}">Delete</button></div>`
+const acts = `<div class="row-actions">${(s.status === 'active' || s.status === 'upcoming') && !isNasal(c) ? `<button class="link${on(adjustId === c.id)}" data-act="chg" data-id="${c.id}" aria-pressed="${adjustId === c.id}">Change dose</button>` : ''}<button class="link${on(cycId === c.id)}" data-act="cy" data-id="${c.id}" aria-pressed="${cycId === c.id}">Pause/End Cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit Cycle</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del${on(confirmId === c.id)}" data-act="del" data-id="${c.id}" aria-pressed="${confirmId === c.id}">Delete</button></div>`
 + (confirmId === c.id ? `<div class="confirm">Delete this cycle? This can’t be undone. <button class="btn dangerfill" data-act="del-yes" data-id="${c.id}">Delete</button><button class="btn ghost" data-act="del-no">Keep</button></div>` : '');
 return `<article class="cyc ${s.status}">
 <div class="band"></div>
@@ -914,6 +975,8 @@ ${optsOpen.has(c.id) ? `<div class="cyopts">${acts}${cycId === c.id ? cyclePanel
 ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
+<div class="kv"><span class="label">Route</span><b>${ROUTES[routeOf(c)][1]}</b></div>
+${isNasal(c) ? `<div class="kv"><span class="label">Spray</span><b>${num(c.spMl)} mL each · ${num(c.bacMl)} mL bottle</b></div>` : ''}
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
 ${c.noRepeat && !offDaysOf(c) ? '<div class="kv"><span class="label">Repeat</span><b>No plan to repeat</b></div>' : ''}${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'wk' : 'wks')}</b></div>` : ''}
 <div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span>${c.interval > 1 ? '<b>Every other day</b>' : `<div class="wk">${wk}</div>`}</div>
@@ -928,7 +991,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep();
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; syncRoute();
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -940,7 +1003,10 @@ function fillForm(c, asNew){
 clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
-$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep(); syncLen();
+$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep();
+selRoute = routeOf(c);
+if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; }
+else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; } syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
 selDays = new Set(c.days); selEvery = c.interval > 1 ? c.interval : 0; renderDays();
 $('f-premix').checked = !!c.premixed;
@@ -957,6 +1023,7 @@ titSteps = asNew ? rows.filter((r, i) => r.week >= 2 && !rows.slice(i + 1).some(
 if (!asNew && titSteps.length) $('f-tit').checked = true;
 renderSteps();
 syncTit(); updateCalc();
+syncRoute();
 editingId = asNew ? null : c.id;
 $('formTitle').textContent = asNew ? 'Repeat cycle' : 'Edit cycle';
 $('submitBtn').textContent = 'Save';
@@ -979,10 +1046,20 @@ if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a 
 const noRepeat = $('f-norep').checked, offRaw = $('f-off').value.trim(), offValue = offRaw === '' || openLen || noRepeat ? null : parseInt(offRaw, 10);
 if (offValue != null && !(offValue >= 0)) return $('err').textContent = 'Off-cycle length must be a whole number, or leave it blank.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
+const nasal = selRoute === 'nasal';
+let nas = null;
+if (nasal){
+const bottle = parseFloat($('n-bottle').value), sp = parseFloat($('n-spray').value), n = parseInt($('n-sprays').value, 10), mgRaw = $('n-mg').value.trim(), mg = parseFloat(mgRaw);
+if (!(bottle > 0)) return $('err').textContent = 'Enter the bottle size in mL.';
+if (!(sp > 0)) return $('err').textContent = 'Enter how many mL each spray delivers.';
+if (!(n > 0)) return $('err').textContent = 'Enter sprays per nostril (at least 1).';
+if (mgRaw !== '' && !(mg > 0)) return $('err').textContent = 'Peptide in bottle must be a number, or leave it blank.';
+nas = {route: 'nasal', spMl: sp, unit: 'mL', dose: +(n * 2 * sp).toFixed(6), bacMl: bottle, vialMg: mg > 0 ? mg : null, premixed: true, titrate: false, plan: []};
+}
 const fv = formVial(), premixed = $('f-premix').checked;
-if (fv.partial) return $('err').textContent = premixed ? 'Enter both the vial size in mL and the concentration, or leave both blank.' : 'Enter both vial size and BAC water, or leave both blank.';
+if (!nasal && fv.partial) return $('err').textContent = premixed ? 'Enter both the vial size in mL and the concentration, or leave both blank.' : 'Enter both vial size and BAC water, or leave both blank.';
 const vialMg = fv.mg, bacMl = fv.ml;
-const titrate = $('f-tit').checked;
+const titrate = !nasal && $('f-tit').checked;
 let plan = [];
 if (titrate){
 if (dose == null) return $('err').textContent = 'Enter a starting dose to titrate from.';
@@ -1019,6 +1096,7 @@ dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, v
 titrate, plan,
 pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
 created: existing ? existing.created : Date.now() };
+if (nas) Object.assign(c, nas); else { c.route = selRoute; delete c.spMl; }
 $('submitBtn').disabled = true;
 try {
 await store.save(c);
@@ -1411,8 +1489,11 @@ if (d < c.start) { err.textContent = 'Pick a date on or after the cycle started.
 let mg = c.vialMg, ml = c.bacMl;
 if (rfEdit.has(c.id)){
 const a = parseFloat($('rf-a-' + c.id).value), bb = parseFloat($('rf-b-' + c.id).value);
+if (isNasal(c)){ if (!(a > 0)) { err.textContent = 'Enter the bottle size in mL.'; break; } ml = a; mg = bb > 0 ? bb : null; }
+else {
 if (!(a > 0) || !(bb > 0)) { err.textContent = c.premixed ? 'Enter the vial size in mL and the concentration.' : 'Enter the vial size in mg and the BAC water in mL.'; break; }
 if (c.premixed){ ml = a; mg = a * bb; } else { mg = a; ml = bb; }
+}
 }
 const changed = Math.abs(mg - c.vialMg) > 1e-9 || Math.abs(ml - c.bacMl) > 1e-9;
 // keep earlier vials at the size they were before this change

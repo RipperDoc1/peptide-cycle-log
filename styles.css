@@ -612,3 +612,16 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .shareall svg{width:17px;height:17px}
 .wn-body > ul{margin-top:8px}
 input:disabled,select:disabled{opacity:.5}
+
+/* delivery route */
+.form.nasal .inj{display:none!important}
+.form:not(.nasal) .nasalf{display:none!important}
+.routeseg{display:flex;flex-wrap:wrap;width:100%}
+.routeseg button{flex:1 1 auto;border:none;background:none;color:var(--ink);font-weight:600;font-size:.92rem;padding:9px 12px;border-radius:999px}
+.routeseg button[aria-checked="true"]{background:var(--sel);color:var(--sel-ink)}
+.rchip{display:inline-block;margin-left:8px;vertical-align:2px;font-size:.68rem;font-weight:700;letter-spacing:.02em;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--sel)}
+.rchip.r-im{background:var(--pause-soft);color:var(--pause)}
+.rchip.r-nasal{background:var(--ok-soft);color:var(--ok)}
+#nasalCalc{display:flex;flex-direction:column;gap:4px}
+.routeseg{flex-wrap:nowrap}
+.routeseg button{white-space:nowrap;font-size:13.5px;padding:9px 6px;flex:1 1 0;min-width:0}

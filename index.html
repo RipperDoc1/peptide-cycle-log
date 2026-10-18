@@ -93,6 +93,14 @@
 <input id="f-name" list="peptides" placeholder="e.g. BPC-157" autocomplete="off" required>
 <datalist id="peptides"></datalist>
 </div>
+<div class="field c6">
+<span class="label" id="routeLabel">Delivery route</span>
+<div class="seg routeseg" role="radiogroup" aria-labelledby="routeLabel">
+<button type="button" role="radio" data-route="subq" aria-checked="true">Subcutaneous</button>
+<button type="button" role="radio" data-route="im" aria-checked="false">Intramuscular</button>
+<button type="button" role="radio" data-route="nasal" aria-checked="false">Nasal</button>
+</div>
+</div>
 <div class="field c2">
 <label class="label" for="f-start">Start date</label>
 <input id="f-start" type="date" required>
@@ -115,7 +123,7 @@
 <label class="chk" for="f-norep"><input type="checkbox" id="f-norep"> No plan to repeat this cycle</label>
 <span class="hint" id="offHint">Optional break before the next round. You confirm before it starts.</span>
 </div>
-<div class="field c2">
+<div class="field c2 inj">
 <label class="label" for="f-dose" id="doseLabel">Dose</label>
 <div class="inline">
 <input id="f-dose" type="number" min="0" step="any" placeholder="0.25" inputmode="decimal">
@@ -136,37 +144,44 @@
 </div>
 </div>
 <div class="field c3">
-<label class="label" for="f-perday">Doses per day</label>
+<label class="label" for="f-perday" id="perdayLabel">Doses per day</label>
 <select id="f-perday"><option value="1">Once a day</option><option value="2">2× a day</option><option value="3">3× a day</option><option value="4">4× a day</option></select>
-<span class="hint">The dose above is per injection.</span>
+<span class="hint" id="perdayHint">The dose above is per injection.</span>
 </div>
-<div class="sect c6"><span class="label">Vial</span><span class="hint">Optional. Fill in to see syringe units and how many vials you need.</span></div>
-<label class="toggle c6 tight" for="f-premix"><input type="checkbox" id="f-premix"> <span><strong>Premixed</strong><span class="hint">Already a liquid, no reconstituting needed.</span></span></label>
-<div class="field c3 recon">
+<div class="sect c6 inj"><span class="label">Vial</span><span class="hint">Optional. Fill in to see syringe units and how many vials you need.</span></div>
+<label class="toggle c6 tight inj" for="f-premix"><input type="checkbox" id="f-premix"> <span><strong>Premixed</strong><span class="hint">Already a liquid, no reconstituting needed.</span></span></label>
+<div class="field c3 recon inj">
 <label class="label" for="f-vial">Vial size (mg)</label>
 <input id="f-vial" type="number" min="0" step="any" placeholder="5" inputmode="decimal">
 </div>
-<div class="field c3 recon">
+<div class="field c3 recon inj">
 <label class="label" for="f-bac">BAC water (mL)</label>
 <input id="f-bac" type="number" min="0" step="any" placeholder="2" inputmode="decimal">
 </div>
-<div class="field c3 premix" hidden>
+<div class="field c3 premix inj" hidden>
 <label class="label" for="f-pml">Vial size (mL)</label>
 <input id="f-pml" type="number" min="0" step="any" placeholder="10" inputmode="decimal">
 </div>
-<div class="field c3 premix" hidden>
+<div class="field c3 premix inj" hidden>
 <label class="label" for="f-pconc">Concentration (mg/mL)</label>
 <input id="f-pconc" type="number" min="0" step="any" placeholder="2.5" inputmode="decimal">
 </div>
-<div class="field c6" id="unitsField" hidden>
+<div class="field c6 inj" id="unitsField" hidden>
 <label class="label" for="f-units">Dose in syringe units (U-100)</label>
 <div class="inline unitsrow"><input id="f-units" type="number" min="0" step="any" inputmode="decimal" placeholder="20"><span class="suffix">units</span><span class="hint" id="unitsEq"></span></div>
 <span class="hint">Type the dose in mg above or in units here. The other one updates.</span>
 </div>
-<div class="calc c6" id="calc" aria-live="polite"></div>
-<div class="vialsneed c6" id="vialsNeed" aria-live="polite" hidden></div>
-<label class="toggle c6" for="f-tit"><input type="checkbox" id="f-tit"> <span><strong>Titrate dose</strong><span class="hint">One line per dose change. Each line sets the dose from that week or date until the next line.</span></span></label>
-<div class="titbox c6" id="titBox" hidden>
+<div class="calc c6 inj" id="calc" aria-live="polite"></div>
+<div class="vialsneed c6 inj" id="vialsNeed" aria-live="polite" hidden></div>
+<div class="sect c6 nasalf"><span class="label">Nasal spray</span><span class="hint">Each dose is the sprays per nostril, in both nostrils.</span></div>
+<div class="field c3 nasalf"><label class="label" for="n-bottle">Bottle size (mL)</label><input id="n-bottle" type="number" min="0" step="any" inputmode="decimal" value="10"></div>
+<div class="field c3 nasalf"><label class="label" for="n-spray">Each spray (mL)</label><input id="n-spray" type="number" min="0" step="any" inputmode="decimal" value="0.1"></div>
+<div class="field c3 nasalf"><label class="label" for="n-mg">Peptide in bottle (mg)</label><input id="n-mg" type="number" min="0" step="any" inputmode="decimal" placeholder="Optional"><span class="hint">Needed to set the dose in mcg.</span></div>
+<div class="field c3 nasalf"><label class="label" for="n-sprays">Sprays per nostril</label><input id="n-sprays" type="number" min="1" step="1" inputmode="numeric" value="1"></div>
+<div class="field c6 nasalf"><label class="label" for="n-mcg">Or enter the dose you want (mcg)</label><div class="inline unitsrow"><input id="n-mcg" type="number" min="0" step="any" inputmode="decimal" placeholder="Add peptide in bottle first" disabled><span class="suffix">mcg</span></div><span class="hint" id="n-mcgnote">Type sprays per nostril or a mcg dose. The other one updates.</span></div>
+<div class="calc c6 nasalf" id="nasalCalc" aria-live="polite"></div>
+<label class="toggle c6 inj" for="f-tit"><input type="checkbox" id="f-tit"> <span><strong>Titrate dose</strong><span class="hint">One line per dose change. Each line sets the dose from that week or date until the next line.</span></span></label>
+<div class="titbox c6 inj" id="titBox" hidden>
 <div class="steprows" id="stepRows"></div>
 <div class="steppreview" id="stepPreview"></div>
 <div class="quick"><button type="button" class="link" id="addStep">+ Add line by week</button><button type="button" class="link" id="addSet">+ Add line by date</button></div>
