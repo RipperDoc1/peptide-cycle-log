@@ -1617,8 +1617,19 @@ const pend = (testers || []).filter(t => t.status === 'pending').length;
 renderList();
 }
 // one-time "What's new" pop-up per user (remembered on the account, so it shows once across devices)
-const WN_ID = '2026-10-18b', WN_SINCE = '2026-10-18';
-const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">New features added Oct 18, 2026</p>
+const WN_ID = 'v1.2', WN_SINCE = '2026-10-18';
+const WN_HTML = `<h2 class="wn-title">What’s new</h2>
+<p class="wn-ver">Update 1.2</p>
+<ul>
+<li><b>Delivery route</b> on every compound: Subcutaneous, Intramuscular or Nasal, shown as a tag on Today</li>
+<li><b>Nasal spray</b> setup: bottle size, spray volume, and sprays per nostril or a desired mcg dose (rounded up to full sprays), with bottle tracking by sprays left</li>
+<li><b>Total per day</b> shown under the dose for compounds taken more than once a day</li>
+<li>Doses always show <b>mg first</b>, with units or sprays next to it</li>
+<li><b>No plan to repeat</b> option when setting up a cycle</li>
+<li><b>Settings</b> (gear, top right) with your profile, light/dark mode and sign out</li>
+<li>Blue <b>+</b> at the top of Today to add a new cycle</li>
+</ul>
+<p class="wn-ver prev">Update 1.1</p>
 <ul>
 <li><b>Every other day</b> schedule option</li>
 <li><b>Off-cycle</b> length on each compound, with an <b>Off-Cycle</b> tab showing breaks and expected restart dates</li>
@@ -1632,7 +1643,7 @@ const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">New fea
 <li><b>Timeline</b> view in All: pick a year to see the compounds used each month</li>
 <li><b>Share</b> a compound as a styled image with dose, frequency, dates and titration</li>
 <li><b>Share all</b> current compounds in one image from the Current tab</li>
-<li>Settings (gear, top right) with your profile, sign out and light/dark mode</li>
+<li>Light/dark mode</li>
 </ul>`;
 let wnShown = false;
 function maybeWhatsNew(){
