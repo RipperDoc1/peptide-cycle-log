@@ -535,7 +535,17 @@ document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on',
 $('eodNote').hidden = !selEvery;
 }
 const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
-const doseWithUnits = (c, dv) => dv == null ? 'dose not set' : `${num(dv)} ${c.unit}${sec(c, dv) ? ` (${sec(c, dv)})` : ''}`;
+// dose for display, always mg first when it can be worked out (units / mL doses show mg, then the amount entered)
+function dosePair(c, dv){
+if (dv == null) return {main: 'Dose not set', sub: ''};
+const mg = mgOf(c, dv);
+if ((c.unit === 'units' || c.unit === 'mL') && mg != null){
+const un = unitsFor(c, dv);
+return {main: `${num(+mg.toFixed(4))} mg`, sub: c.unit === 'units' ? `${num(+dv.toFixed(2))} units` : `${num(dv)} mL${un != null ? ' \u00b7 ' + u(un) : ''}`};
+}
+return {main: `${num(dv)} ${c.unit}`, sub: sec(c, dv)};
+}
+const doseWithUnits = (c, dv) => { if (dv == null) return 'dose not set'; const d = dosePair(c, dv); return d.main + (d.sub ? ` (${d.sub})` : ''); };
 function todayBlock(c, s){
 const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} injections</span>` : '';
 if (s.status === 'paused')
@@ -544,11 +554,11 @@ if (s.status === 'complete')
 return `<div class="today done"><span class="label">${s.endedEarly ? 'Ended early' : 'Finished'}</span><div class="big">${s.endedEarly ? 'Ended ' + fmt(parse(c.endedOn)) : 'Finished ' + fmt(s.end)}</div>${s.curDose != null ? `<span class="tx">Last dose level ${num(s.curDose)} ${c.unit}</span>` : ''}</div>`;
 if (s.status === 'upcoming'){
 const fd = doseAtIndex(c, s.nextIdx);
-return `<div class="today"><span class="label">Starts ${dayWord(s.start)}</span><div class="big">${fd != null ? num(fd) + ' ' + c.unit : 'Dose not set'}${fd != null && sec(c, fd) ? ` <span class=\"bu\">${sec(c, fd)}</span>` : ''}</div>${x}<span class="tx">First dose ${s.next ? dayWord(s.next) : '—'}</span></div>`;
+return `<div class="today"><span class="label">Starts ${dayWord(s.start)}</span><div class="big">${dosePair(c, fd).main}${fd != null && dosePair(c, fd).sub ? ` <span class=\"bu\">${dosePair(c, fd).sub}</span>` : ''}</div>${x}<span class="tx">First dose ${s.next ? dayWord(s.next) : '—'}</span></div>`;
 }
 if (s.doseToday != null){
 const sx = sec(c, s.doseToday);
-return `<div class="today on"><span class="label">Dose today</span><div class="big">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}</div>${x}</div>`;
+return `<div class="today on"><span class="label">Dose today</span><div class="big">${dosePair(c, s.doseToday).main}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</div>${x}</div>`;
 }
 const nd = s.next ? doseAtIndex(c, s.nextIdx) : null;
 return `<div class="today off"><span class="label">Dose today</span><div class="big">No dose today</div><span class="tx">${s.next ? `Next ${dayWord(s.next)}${nd != null ? ' · ' + doseWithUnits(c, nd) : ''}` : 'No doses left in this cycle'}</span></div>`;
@@ -684,7 +694,7 @@ const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 
 const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show next 3 days' : `Show next 7 days${hidden ? ` (${hidden} more day${hidden === 1 ? '' : 's'})` : ''}`}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${num(dv)} ${c.unit}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${sec(c, dv) ? `<span class="u">${sec(c, dv)}</span>` : ''}</span></div>`).join('')}</div>
+<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span></div>`).join('')}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 + (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
@@ -843,7 +853,7 @@ const {c, s} = x, on = openRows.has(key);
 let line;
 if (s.status === 'paused') line = `Paused since ${fmt(parse(s.openPause.from))}`;
 else if (s.status === 'complete' && offInfo(c, s)){ const o = offInfo(c, s); line = o.ready ? 'Off-cycle done · ready for next round' : `Off-cycle · next round ${fmt(o.due)}`; }
-else if (s.status === 'complete') line = s.endedEarly ? `Ended ${fmt(parse(c.endedOn))}` : `Finished ${fmt(s.end)}`;
+else if (s.status === 'complete') line = (s.endedEarly ? `Ended ${fmt(parse(c.endedOn))}` : `Finished ${fmt(s.end)}`) + (c.noRepeat ? ' · not repeating' : '');
 else if (s.status === 'upcoming') line = `Starts ${dayWord(s.start)}`;
 else if (s.doseToday != null) line = `Due today · ${doseWithUnits(c, s.doseToday)}`;
 else if (s.next) line = `Next ${dayWord(s.next)} · ${doseWithUnits(c, doseAtIndex(c, s.nextIdx))}`;
@@ -858,7 +868,7 @@ const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
 return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
-${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}${per > 1 ? ` <span class="bu">× ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
+${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${dosePair(c, s.doseToday).main}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}${per > 1 ? ` <span class="bu">\u00d7 ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
 <span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 function card({c, s}, open){
@@ -905,7 +915,7 @@ ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
-${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'wk' : 'wks')}</b></div>` : ''}
+${c.noRepeat && !offDaysOf(c) ? '<div class="kv"><span class="label">Repeat</span><b>No plan to repeat</b></div>' : ''}${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'wk' : 'wks')}</b></div>` : ''}
 <div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span>${c.interval > 1 ? '<b>Every other day</b>' : `<div class="wk">${wk}</div>`}</div>
 </div>
 ${lifeLine}</div>` + detailsBlock(c, s) : ''}
@@ -918,7 +928,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks';
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep();
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -930,7 +940,7 @@ function fillForm(c, asNew){
 clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
-$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; syncLen();
+$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep(); syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
 selDays = new Set(c.days); selEvery = c.interval > 1 ? c.interval : 0; renderDays();
 $('f-premix').checked = !!c.premixed;
@@ -966,7 +976,7 @@ const openLen = $('f-lenunit').value === 'open';
 if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length must be at least 1.';
 if (!selEvery && !selDays.size) return $('err').textContent = 'Select at least one day of the week.';
 if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
-const offRaw = $('f-off').value.trim(), offValue = offRaw === '' || openLen ? null : parseInt(offRaw, 10);
+const noRepeat = $('f-norep').checked, offRaw = $('f-off').value.trim(), offValue = offRaw === '' || openLen || noRepeat ? null : parseInt(offRaw, 10);
 if (offValue != null && !(offValue >= 0)) return $('err').textContent = 'Off-cycle length must be a whole number, or leave it blank.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
 const fv = formVial(), premixed = $('f-premix').checked;
@@ -1003,7 +1013,7 @@ return;
 }
 }
 const c = { ...(existing || {}), id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
-offValue: offValue > 0 ? offValue : null, offUnit: $('f-offunit').value,
+offValue: offValue > 0 ? offValue : null, offUnit: $('f-offunit').value, noRepeat,
 name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: selEvery ? [0,1,2,3,4,5,6] : [...selDays].sort(), interval: selEvery || null,
 dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, vialMg, bacMl, premixed: premixed && vialMg != null,
 titrate, plan,
@@ -1034,6 +1044,8 @@ const formLen = () => {
 if ($('f-lenunit').value === 'open'){ const st = $('f-start').value; return (st ? Math.max(diff(parse(st), today()), 0) : 0) + OPEN_AHEAD; }
 const v = parseInt($('f-len').value, 10) || 0; return $('f-lenunit').value === 'weeks' ? v * 7 : v;
 };
+function syncNoRep(){ const n = $('f-norep').checked; $('f-off').disabled = n; $('f-offunit').disabled = n; if (n) $('f-off').value = ''; $('offHint').textContent = n ? 'This cycle won’t be offered again when it ends. You can still use Repeat on it later.' : 'Optional break before the next round. You confirm before it starts.'; }
+$('f-norep').addEventListener('change', syncNoRep);
 function syncLen(){ const o = $('f-lenunit').value === 'open'; $('offField').hidden = o; $('f-len').hidden = o; $('f-lenunit').hidden = o; $('f-open').checked = o; $('openNote').hidden = !o; }
 $('f-open').addEventListener('change', () => { const sel = $('f-lenunit'); sel.value = $('f-open').checked ? 'open' : 'weeks'; if (!$('f-open').checked && !(parseInt($('f-len').value, 10) > 0)) $('f-len').value = 8; sel.dispatchEvent(new Event('change', {bubbles: true})); });
 $('f-lenunit').addEventListener('change', syncLen);

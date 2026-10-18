@@ -112,7 +112,8 @@
 <input id="f-off" type="number" min="0" step="1" placeholder="None" inputmode="numeric">
 <select id="f-offunit" aria-label="Off-cycle length unit"><option value="weeks">wks</option><option value="days">days</option></select>
 </div>
-<span class="hint">Optional break before the next round. You confirm before it starts.</span>
+<label class="chk" for="f-norep"><input type="checkbox" id="f-norep"> No plan to repeat this cycle</label>
+<span class="hint" id="offHint">Optional break before the next round. You confirm before it starts.</span>
 </div>
 <div class="field c2">
 <label class="label" for="f-dose" id="doseLabel">Dose</label>
