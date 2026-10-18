@@ -535,3 +535,13 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .vsheet .vconfirm{background:var(--sunken)}
 .vsheet .vconfirm input{background:var(--surface)}
 .vsheet .refill{border-top:none}
+
+/* action buttons as pills; the open one stays dark blue until tapped again */
+.row-actions{gap:8px}
+.row-actions .link{background:var(--sunken);border:1px solid var(--line);color:var(--ink);padding:8px 14px;border-radius:999px;font-weight:600;font-size:.88rem;text-decoration:none}
+.row-actions .link:hover{color:var(--ink)}
+.row-actions .link.on{background:var(--sel);border-color:var(--sel);color:var(--sel-ink)}
+.row-actions .link.del{color:var(--danger)}
+.row-actions .link.del.on{background:var(--danger);border-color:var(--danger);color:#fff}
+.cyc .confirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:color-mix(in srgb,var(--danger) 8%,var(--surface));border-radius:var(--r-sm);padding:10px 12px;font-size:.9rem}
+.cyc .confirm .btn{padding:8px 16px}

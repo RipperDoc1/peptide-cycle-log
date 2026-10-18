@@ -660,9 +660,9 @@ const adjForm = adjustId === c.id ? `<div class="adjust">
 <span class="hint" id="a-units" style="grid-column:1/-1">${sec(c, s.curDose) ? `= ${sec(c, s.curDose)} per injection` : ''}</span>
 <div class="actions"><button class="btn" data-act="chg-save" data-id="${c.id}">Save dose change</button><button class="btn ghost" data-act="chg-cancel">Cancel</button><span class="err" id="a-err"></span></div>
 </div>` : '';
-const acts = confirmId === c.id
-? `<span class="confirm">Delete this cycle? <button class="link del" data-act="del-yes" data-id="${c.id}">Delete</button><button class="link" data-act="del-no">Keep</button></span>`
-: `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link" data-act="chg" data-id="${c.id}">Change dose</button>` : ''}<button class="link" data-act="cy" data-id="${c.id}">Pause/End Cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit Cycle</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del" data-act="del" data-id="${c.id}">Delete</button></div>`;
+const on = x => x ? ' on' : '';
+const acts = `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link${on(adjustId === c.id)}" data-act="chg" data-id="${c.id}" aria-pressed="${adjustId === c.id}">Change dose</button>` : ''}<button class="link${on(cycId === c.id)}" data-act="cy" data-id="${c.id}" aria-pressed="${cycId === c.id}">Pause/End Cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit Cycle</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del${on(confirmId === c.id)}" data-act="del" data-id="${c.id}" aria-pressed="${confirmId === c.id}">Delete</button></div>`
++ (confirmId === c.id ? `<div class="confirm">Delete this cycle? This can’t be undone. <button class="btn dangerfill" data-act="del-yes" data-id="${c.id}">Delete</button><button class="btn ghost" data-act="del-no">Keep</button></div>` : '');
 return `<article class="cyc ${s.status}">
 <div class="band"></div>
 <div class="body">
@@ -675,9 +675,9 @@ ${todayBlock(c, s)}
 ${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="fill" style="width:${pct}%"></div></div>`}
 <div class="progtext"><span>${progL}</span><span>${progR}</span></div>
 </div>
+${acts}
 ${cycId === c.id ? cyclePanel(c, s) : ''}
 ${adjForm}
-${acts}
 <div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">${notesOpen.has(c.id) ? 'Hide notes' : 'Notes' + ((c.notes || []).length ? ` (${c.notes.length})` : '')}</button></div></div>
 ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
@@ -1192,7 +1192,7 @@ const i = +b.dataset.i;
 await saveCycle({...c, pauses: (c.pauses||[]).filter((_, k) => k !== i)}, 'err');
 break;
 }
-case 'chg': confirmId = null; cycId = null; adjustId = c.id; renderList(); { const el = $('a-dose'); if (el){ el.focus(); el.select(); } } break;
+case 'chg': confirmId = null; cycId = null; if (adjustId === c.id){ adjustId = null; renderList(); break; } adjustId = c.id; renderList(); { const el = $('a-dose'); if (el){ el.focus(); el.select(); } } break;
 case 'chg-cancel': adjustId = null; renderList(); break;
 case 'chg-save': {
 const date = $('a-date').value, v = $('a-dose').value.trim(), dose = parseFloat(v);
@@ -1215,7 +1215,7 @@ break;
 }
 case 'edit': confirmId = null; adjustId = null; setView('add', true); fillForm(c, false); break;
 case 'dup':  confirmId = null; setView('add', true); fillForm(c, true); break;
-case 'del':  confirmId = c.id; renderList(); break;
+case 'del':  adjustId = null; cycId = null; confirmId = confirmId === c.id ? null : c.id; renderList(); break;
 case 'del-no': confirmId = null; renderList(); break;
 case 'del-yes':
 try { await store.remove(c.id); cycles = cycles.filter(x => x.id !== c.id); }
