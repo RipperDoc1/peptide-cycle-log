@@ -587,3 +587,8 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .years{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .years button{background:var(--btn);border:1px solid var(--btn-line);color:var(--ink);font-weight:700;font-size:.9rem;padding:7px 16px;border-radius:999px}
 .years button[aria-selected="true"]{background:var(--sel);border-color:var(--sel);color:var(--sel-ink)}
+.cyc .top{gap:10px}
+.sharebtn{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:1px solid var(--btn-line);background:var(--btn);color:var(--sel);display:grid;place-items:center;margin-left:6px}
+.sharebtn svg{width:19px;height:19px}
+.sharebtn:active{transform:scale(.95)}
+.cyc .top .name{flex:1;min-width:0}

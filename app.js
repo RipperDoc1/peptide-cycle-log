@@ -89,9 +89,9 @@ return {name: c.name, start: fmtY(s.start), end: s.endedEarly ? fmtY(parse(c.end
 freq: freqText(c), notes: sortedNotes(c).slice().reverse().map(n => ({date: fmtY(parse(n.date)), text: n.text}))};
 }
 const fileBase = c => (c.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'cycle') + '-notes';
-async function deliver(blob, filename){
+async function deliver(blob, filename, text){
 const file = new File([blob], filename, {type: blob.type});
-if (navigator.canShare && navigator.canShare({files: [file]})){ try { await navigator.share({files: [file], title: filename}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+if (navigator.canShare && navigator.canShare({files: [file]})){ try { await navigator.share(text ? {files: [file], text} : {files: [file], title: filename}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
 const url = URL.createObjectURL(blob), a = document.createElement('a');
 a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
 setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -102,6 +102,97 @@ const lines = [x.name, '='.repeat(Math.max(x.name.length, 8)), `Cycle start: ${x
 x.notes.forEach(n => { lines.push(n.date); lines.push(n.text); lines.push(''); });
 if (!x.notes.length) lines.push('No notes.');
 return deliver(new Blob([lines.join('\n')], {type: 'text/plain'}), fileBase(c) + '.txt');
+}
+// ---- share card: a nicely formatted image (plus text) of a cycle ----
+function daysText(c){
+if (c.interval > 1) return 'Every other day';
+const d = c.days || [];
+if (d.length === 7) return 'Daily';
+if (d.length === 5 && [1,2,3,4,5].every(x => d.includes(x))) return 'Mon – Fri';
+if (d.length === 2 && d.includes(0) && d.includes(6)) return 'Weekends';
+return [1,2,3,4,5,6,0].filter(i => d.includes(i)).map(i => DAYNAME[i]).join(', ');
+}
+function shareData(c){
+const s = stats(c), per = c.perDay || 1, fmtY = d => d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+const dose = s.curDose != null ? s.curDose : c.dose;
+const len = isOpen(c) ? 'Ongoing' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue == 1 ? 'week' : 'weeks') : (c.lenValue == 1 ? 'day' : 'days')}`;
+const wk = (a, b) => { const x = Math.floor(a / 7) + 1, y = Math.floor(b / 7) + 1; return x === y ? `Week ${x}` : `Weeks ${x}–${y}`; };
+const steps = s.steps.length > 1 ? s.steps.map((st, i) => ({when: isOpen(c) && i === s.steps.length - 1 ? `Week ${Math.floor(st.from / 7) + 1} onward` : wk(st.from, st.to), dose: `${num(st.dose)} ${c.unit}`, extra: sec(c, st.dose)})) : [];
+const status = s.status === 'upcoming' ? `Starts ${fmtY(s.start)}` : s.status === 'paused' ? 'Paused' : isOpen(c) ? `Day ${Math.max(s.elapsed, 0)} · ongoing` : `Day ${Math.max(s.elapsed, 0)} of ${s.span}`;
+return {name: c.name, status, statusKey: s.status, dose: dose != null ? `${num(dose)} ${c.unit}` : 'Dose not set', doseSub: [sec(c, dose) ? `${sec(c, dose)} per injection` : (dose != null ? 'per injection' : ''), per > 1 ? `${per}× a day` : ''].filter(Boolean).join(' · '),
+rows: [['Frequency', daysText(c) + (per > 1 ? ` · ${per}× a day` : '')], ['Start', fmtY(s.start)], ['End', s.endedEarly ? fmtY(parse(c.endedOn)) : isOpen(c) ? 'Indefinite' : fmtY(s.end)], ['Length', len]].concat(offDaysOf(c) ? [['Off-cycle after', `${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'week' : 'weeks')}`]] : []),
+steps};
+}
+async function shareCycle(c){
+const x = shareData(c);
+try { await Promise.all(['400', '600', '800'].map(w => document.fonts.load(`${w} 40px Figtree`))); } catch {}
+const F = (w, px) => `${w} ${px}px Figtree, -apple-system, "Segoe UI", sans-serif`;
+const W = 1080, P = 72, IN = 64, CW = W - P * 2, TW = CW - IN * 2;
+const C = {bg1: '#eaf0fa', bg2: '#f4f4f7', card: '#ffffff', ink: '#15171c', muted: '#7d838f', line: '#eceef2', sel: '#2f5fb3', soft: '#e8f0fc', ok: '#2f8a5b', okSoft: '#e6f4ec', warn: '#a86a12', warnSoft: '#fbf1e1', pause: '#7a5bc7', pauseSoft: '#f1ecfb'};
+const pillC = {active: [C.okSoft, C.ok], upcoming: [C.warnSoft, C.warn], paused: [C.pauseSoft, C.pause]}[x.statusKey] || [C.soft, C.sel];
+const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+const wrap = (text, font, max) => { ctx.font = font; const words = String(text).split(/\s+/), out = []; let line = '';
+words.forEach(w => { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > max && line){ out.push(line); line = w; } else line = t; }); if (line) out.push(line); return out; };
+const rr = (x0, y0, w, h, r) => { ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r); ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r); ctx.arcTo(x0, y0 + h, x0, y0, r); ctx.arcTo(x0, y0, x0 + w, y0, r); ctx.closePath(); };
+// one pass to measure, one to draw
+const paint = draw => {
+const L = P + IN; let y = P + 64;
+const T = (str, font, color, x0, yy, align) => { if (!draw) return; ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(str, x0, yy); };
+// brand
+if (draw){ ctx.fillStyle = C.ink; rr(L, y - 4, 22, 9, 3); ctx.fill(); rr(L - 3, y + 8, 28, 40, 7); ctx.fill(); }
+T('Peptide Log', F(800, 34), C.ink, L + 44, y + 38);
+y += 110;
+// name + status pill
+const nameLines = wrap(x.name, F(800, 76), TW);
+nameLines.forEach(l => { y += 80; T(l, F(800, 76), C.ink, L, y); });
+y += 30;
+ctx.font = F(700, 28); const pw = ctx.measureText(x.status).width + 64;
+if (draw){ ctx.fillStyle = pillC[0]; rr(L, y, pw, 54, 27); ctx.fill(); ctx.fillStyle = pillC[1]; ctx.beginPath(); ctx.arc(L + 28, y + 27, 6, 0, Math.PI * 2); ctx.fill(); }
+T(x.status, F(700, 28), pillC[1], L + 44, y + 37);
+y += 54 + 44;
+// dose box
+const subLines = x.doseSub ? wrap(x.doseSub, F(500, 32), TW - 80) : [];
+const bh = 70 + 96 + (subLines.length ? subLines.length * 44 + 10 : 0) + 40;
+if (draw){ ctx.fillStyle = C.soft; rr(L, y, TW, bh, 32); ctx.fill(); }
+T('DOSE', F(700, 26), C.sel, L + 40, y + 62);
+T(x.dose, F(800, 92), C.ink, L + 40, y + 62 + 96);
+subLines.forEach((l, i) => T(l, F(500, 32), C.muted, L + 40, y + 62 + 96 + 52 + i * 44));
+y += bh + 34;
+// info rows
+x.rows.forEach(([k, v], i) => {
+const vl = wrap(v, F(700, 34), TW * 0.6);
+const rh = Math.max(84, 40 + vl.length * 44);
+if (draw && i){ ctx.fillStyle = C.line; ctx.fillRect(L, y, TW, 2); }
+T(k, F(500, 32), C.muted, L, y + 54);
+vl.forEach((l, j) => T(l, F(700, 34), C.ink, L + TW, y + 54 + j * 44, 'right'));
+y += rh;
+});
+// titration
+if (x.steps.length){
+y += 30;
+T('Titration', F(800, 40), C.ink, L, y + 40); y += 70;
+x.steps.forEach((st, i) => {
+const rh = 76;
+if (draw){ ctx.fillStyle = i % 2 ? C.card : '#f5f7fb'; rr(L, y, TW, rh - 8, 18); ctx.fill(); }
+T(st.when, F(600, 30), C.ink, L + 26, y + 46);
+T(st.dose, F(800, 32), C.sel, L + TW - (st.extra ? 200 : 26), y + 46, 'right');
+if (st.extra) T(st.extra, F(500, 28), C.muted, L + TW - 26, y + 46, 'right');
+y += rh;
+});
+}
+y += 40;
+return y + IN; // card bottom
+};
+const cardBottom = paint(false);
+const H = Math.max(1080, cardBottom + 110);
+cv.width = W; cv.height = H;
+const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, C.bg1); g.addColorStop(1, C.bg2); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+ctx.save(); ctx.shadowColor = 'rgba(20,30,50,.10)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 12; ctx.fillStyle = C.card; rr(P, P, CW, cardBottom - P, 48); ctx.fill(); ctx.restore();
+paint(true);
+ctx.font = F(500, 26); ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.fillText('Shared from Peptide Log', W / 2, H - 46);
+const text = [`${x.name} — ${x.status}`, `Dose: ${x.dose}${x.doseSub ? ' (' + x.doseSub + ')' : ''}`, ...x.rows.map(([k, v]) => `${k}: ${v}`), ...(x.steps.length ? ['Titration:', ...x.steps.map(st => `  ${st.when}: ${st.dose}${st.extra ? ' (' + st.extra + ')' : ''}`)] : [])].join('\n');
+const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+return deliver(blob, (c.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'cycle') + '.png', text);
 }
 let pdfLib = null;
 const loadPdf = () => pdfLib || (pdfLib = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/jspdf-2.5.1.min.js'; sc.onload = () => res(window.jspdf.jsPDF); sc.onerror = () => { pdfLib = null; rej(new Error('load')); }; document.head.appendChild(sc); }));
@@ -700,7 +791,7 @@ return `<article class="cyc ${s.status}">
 <div class="body">
 <div class="top">
 <div class="name">${esc(c.name)}</div>
-<span class="pill ${s.status}">${s.status}</span>
+<span class="pill ${s.status}">${s.status}</span>${s.status !== 'complete' ? `<button type="button" class="sharebtn" data-act="share" data-id="${c.id}" aria-label="Share ${esc(c.name)}" title="Share"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>` : ''}
 </div>
 ${todayBlock(c, s)}
 <div class="prog">
@@ -1149,6 +1240,7 @@ if (b.dataset.act === 'sheet'){ [expanded, collapsed, notesOpen, optsOpen].forEa
 if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
+case 'share': b.disabled = true; try { await shareCycle(c); } catch (e) { console.error(e); } finally { b.disabled = false; } break;
 case 'opts': if (optsOpen.has(c.id)){ optsOpen.delete(c.id); if (adjustId === c.id) adjustId = null; if (cycId === c.id) cycId = null; if (confirmId === c.id) confirmId = null; } else optsOpen.add(c.id); renderList(); break;
 case 'notes': notesOpen.has(c.id) ? notesOpen.delete(c.id) : notesOpen.add(c.id); renderList(); break;
 case 'nt-add': {
