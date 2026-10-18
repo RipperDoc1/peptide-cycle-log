@@ -205,7 +205,7 @@ const wk = (a, b) => { const x = Math.floor(a / 7) + 1, y = Math.floor(b / 7) + 
 const steps = s.steps.length > 1 ? s.steps.map((st, i) => ({when: isOpen(c) && i === s.steps.length - 1 ? `Week ${Math.floor(st.from / 7) + 1} onward` : wk(st.from, st.to), dose: `${num(st.dose)} ${c.unit}`, extra: sec(c, st.dose)})) : [];
 const status = s.status === 'upcoming' ? `Starts ${fmtY(s.start)}` : s.status === 'paused' ? 'Paused' : isOpen(c) ? `Day ${Math.max(s.elapsed, 0)} · ongoing` : `Day ${Math.max(s.elapsed, 0)} of ${s.span}`;
 const dp = dosePair(c, dose), nas = isNasal(c);
-return {name: c.name, status, statusKey: s.status, dose: nas && dose != null ? dp.main + ' per nostril' : dp.main, doseSub: [dose == null ? '' : nas ? dp.sub.replace(/^per nostril \u00b7 /, '') : (dp.sub ? `${dp.sub} per injection` : 'per injection'), per > 1 ? `${per}× a day` : ''].filter(Boolean).join(' · '),
+return {name: c.name, status, statusKey: s.status, dose: dp.main, doseSub: [dose == null ? '' : nas ? dp.sub : (dp.sub ? `${dp.sub} per injection` : 'per injection'), per > 1 ? `${per}× a day` : ''].filter(Boolean).join(' · '),
 rows: [['Route', ROUTES[routeOf(c)][1]], ['Frequency', daysText(c) + (per > 1 ? ` · ${per}× a day` : '')], ['Start', fmtY(s.start)], ['End', s.endedEarly ? fmtY(parse(c.endedOn)) : isOpen(c) ? 'Indefinite' : fmtY(s.end)], ['Length', len]].concat(offDaysOf(c) ? [['Off-cycle after', `${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'week' : 'weeks')}`]] : []),
 steps};
 }
@@ -592,7 +592,9 @@ function dosePair(c, dv){
 if (dv == null) return {main: 'Dose not set', sub: ''};
 if (isNasal(c) && c.spMl > 0){
 const n = spraysOf(c, dv), mg = c.vialMg > 0 && c.bacMl > 0 ? dv * c.vialMg / c.bacMl : null;
-return {main: `${num(n)} spray${n === 1 ? '' : 's'}`, sub: `per nostril \u00b7 ${num(+dv.toFixed(3))} mL${mg != null ? ' \u00b7 ' + (mg < 1 ? num(+(mg * 1000).toFixed(1)) + ' mcg' : num(+mg.toFixed(3)) + ' mg') : ''}`};
+const spr = `${num(n)} spray${n === 1 ? '' : 's'}/side`;
+if (mg == null) return {main: spr, sub: `${num(+dv.toFixed(3))} mL`};
+return {main: mg < 1 ? `${num(+(mg * 1000).toFixed(1))} mcg` : `${num(+mg.toFixed(3))} mg`, sub: spr};
 }
 const mg = mgOf(c, dv);
 if ((c.unit === 'units' || c.unit === 'mL') && mg != null){
@@ -928,7 +930,7 @@ const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
 return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
-${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}${per > 1 ? ` <span class="bu">\u00d7 ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
+${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${per > 1 ? ` \u00d7 ${per}` : ''}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</span><span class="cline">${prog}</span></span>
 <span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 function card({c, s}, open){

@@ -642,3 +642,4 @@ header .syncrow .sync{margin-top:0}
 .themebtn svg{width:15px;height:15px}
 .hright{top:-4px}
 @media (max-width:380px){.addcyc{font-size:.85rem;padding:0 13px 0 10px;height:40px}}
+.upitem .q b{white-space:nowrap}
