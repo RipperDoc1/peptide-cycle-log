@@ -569,3 +569,18 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .mi-sub{color:var(--muted);font-size:.85rem}
 .mitem .chev{font-size:1.4rem;line-height:1;color:var(--muted)}
 .month .mhead{flex-direction:column;align-items:flex-start;gap:0}
+/* slightly darker unselected buttons */
+:root{--btn:#e3e8f0; --btn-line:#d6dce6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--btn:#2b303a; --btn-line:#363c48}}
+:root[data-theme="dark"]{--btn:#2b303a; --btn-line:#363c48}
+.detbtn,.row-actions .link,.cyopts .row-actions .link,.quick .link,.upmore,.seg,.btn.ghost{background:var(--btn);border:1px solid var(--btn-line)}
+.seg button{background:none;border:none}
+.row-actions .link.on,.cyopts .row-actions .link.on,.quick .link.on{background:var(--sel);border-color:var(--sel)}
+.row-actions .link.del.on,.cyopts .row-actions .link.del.on{background:var(--danger);border-color:var(--danger)}
+.detbtn[aria-expanded="true"],.upmore[aria-expanded="true"]{background:var(--sel);border-color:var(--sel);color:var(--sel-ink)}
+.day{background:var(--btn);border-color:var(--btn-line)}
+.day[aria-pressed="true"]{background:var(--sel);border-color:var(--sel)}
+/* keep Detailed info / Notes / Options on one row */
+.footbtns{flex-wrap:nowrap;gap:6px;width:100%}
+.footbtns .detbtn{flex:1 1 auto;padding:8px 10px;font-size:.84rem;white-space:nowrap;font-weight:600}
+.footbtns{flex-wrap:wrap}

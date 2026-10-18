@@ -702,7 +702,7 @@ ${todayBlock(c, s)}
 ${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="fill" style="width:${pct}%"></div></div>`}
 <div class="progtext"><span>${progL}</span><span>${progR}</span></div>
 </div>
-<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">${notesOpen.has(c.id) ? 'Hide notes' : 'Notes' + ((c.notes || []).length ? ` (${c.notes.length})` : '')}</button><button class="detbtn" data-act="opts" data-id="${c.id}" aria-expanded="${optsOpen.has(c.id)}">${optsOpen.has(c.id) ? 'Hide cycle options' : 'Cycle Options'}</button></div></div>
+<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">${notesOpen.has(c.id) ? 'Hide notes' : 'Notes' + ((c.notes || []).length ? ` (${c.notes.length})` : '')}</button><button class="detbtn" data-act="opts" data-id="${c.id}" aria-expanded="${optsOpen.has(c.id)}">${optsOpen.has(c.id) ? 'Hide options' : 'Options'}</button></div></div>
 ${optsOpen.has(c.id) ? `<div class="cyopts">${acts}${cycId === c.id ? cyclePanel(c, s) : ''}${adjForm}</div>` : ''}
 ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
