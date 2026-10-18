@@ -56,7 +56,8 @@ return out;
 }
 let nxPick = null;
 let dupAck = null;
-const notesOpen = new Set(); // cards with the notes section open
+const notesOpen = new Set();
+const optsOpen = new Set(); // cards with Cycle Options open // cards with the notes section open
 const sortedNotes = c => (c.notes || []).slice().sort((a, b) => (b.date + b.at).localeCompare(a.date + a.at));
 function notesBlock(c){
 const list = sortedNotes(c);
@@ -675,10 +676,8 @@ ${todayBlock(c, s)}
 ${open_ ? '' : `<div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="fill" style="width:${pct}%"></div></div>`}
 <div class="progtext"><span>${progL}</span><span>${progR}</span></div>
 </div>
-${acts}
-${cycId === c.id ? cyclePanel(c, s) : ''}
-${adjForm}
-<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">${notesOpen.has(c.id) ? 'Hide notes' : 'Notes' + ((c.notes || []).length ? ` (${c.notes.length})` : '')}</button></div></div>
+<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">${notesOpen.has(c.id) ? 'Hide notes' : 'Notes' + ((c.notes || []).length ? ` (${c.notes.length})` : '')}</button><button class="detbtn" data-act="opts" data-id="${c.id}" aria-expanded="${optsOpen.has(c.id)}">${optsOpen.has(c.id) ? 'Hide cycle options' : 'Cycle Options'}</button></div></div>
+${optsOpen.has(c.id) ? `<div class="cyopts">${acts}${cycId === c.id ? cyclePanel(c, s) : ''}${adjForm}</div>` : ''}
 ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
@@ -1113,10 +1112,11 @@ return;
 }
 if (b.dataset.act === 'vsheet'){ vialSheetId = b.dataset.id; vialFresh = true; rfEdit.delete(b.dataset.id); renderList(); return; }
 if (b.dataset.act === 'vsheet-close'){ vialSheetId = null; renderList(); return; }
-if (b.dataset.act === 'sheet'){ [expanded, collapsed, notesOpen].forEach(st => st.delete(b.dataset.id)); sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
-if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
+if (b.dataset.act === 'sheet'){ [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(b.dataset.id)); sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
+if (b.dataset.act === 'sheet-close'){ if (sheetId) [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
+case 'opts': if (optsOpen.has(c.id)){ optsOpen.delete(c.id); if (adjustId === c.id) adjustId = null; if (cycId === c.id) cycId = null; if (confirmId === c.id) confirmId = null; } else optsOpen.add(c.id); renderList(); break;
 case 'notes': notesOpen.has(c.id) ? notesOpen.delete(c.id) : notesOpen.add(c.id); renderList(); break;
 case 'nt-add': {
 const txt = $('nt-text-' + c.id).value.trim(), date = $('nt-date-' + c.id).value || iso(today());
@@ -1442,7 +1442,7 @@ if (!window.supabase){ $('loading').textContent = 'Couldn\'t load the app. Check
 sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } });
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetId){ vialSheetId = null; renderList(); return; } if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen].forEach(st => st.delete(sheetId)); sheetId = null; renderList(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetId){ vialSheetId = null; renderList(); return; } if (e.key === 'Escape' && sheetId){ [expanded, collapsed, notesOpen, optsOpen].forEach(st => st.delete(sheetId)); sheetId = null; renderList(); } });
 // light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
 (function themeToggle(){
 const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;

@@ -545,3 +545,12 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .row-actions .link.del.on{background:var(--danger);border-color:var(--danger);color:#fff}
 .cyc .confirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:color-mix(in srgb,var(--danger) 8%,var(--surface));border-radius:var(--r-sm);padding:10px 12px;font-size:.9rem}
 .cyc .confirm .btn{padding:8px 16px}
+.detbtn[data-act="opts"][aria-expanded="true"]{background:var(--sel);color:var(--sel-ink)}
+.cyopts{display:flex;flex-direction:column;gap:12px;background:var(--sunken);border-radius:var(--r-md);padding:14px}
+.cyopts .row-actions .link{background:var(--surface)}
+.cyopts .row-actions .link.on{background:var(--sel)}
+.cyopts .row-actions .link.del.on{background:var(--danger)}
+.cyopts .adjust,.cyopts .cypanel,.cyopts .cyopt{background:var(--surface)}
+.cyopts input{background:var(--sunken);border:1px solid var(--line)}
+.cyopts .cypanel{grid-template-columns:1fr!important;display:grid;gap:14px}
+.cyopts .cyopt .btn{white-space:nowrap}
