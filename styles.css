@@ -513,3 +513,12 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .vcgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .vconfirm .link{align-self:flex-start}
 .vconfirm input{background:var(--sunken);border:1px solid var(--line)}
+/* Upcoming: stacked name / dose / units */
+.upitems{gap:12px}
+.upitem{display:flex;flex-direction:column;align-items:flex-start;gap:1px;flex-wrap:nowrap}
+.upitem .n{font-weight:800;font-size:1rem;line-height:1.25;color:var(--ink)}
+.upitem .q{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;color:var(--ink)}
+.upitem .q b{font-weight:700;font-size:.9rem}
+.upitem .q .u{font-weight:400;font-size:.85rem;color:var(--muted)}
+.upitem .q{flex-direction:column;align-items:flex-start;gap:0}.upitem .q .u{line-height:1.3}
+.uplist.bubbles .upday{grid-template-columns:4.2em minmax(0,1fr)}
