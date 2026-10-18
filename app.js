@@ -56,6 +56,7 @@ return out;
 }
 let nxPick = null;
 let dupAck = null;
+let allYear = (() => { try { return parseInt(localStorage.getItem('pcl-allyear'), 10) || new Date().getFullYear(); } catch { return new Date().getFullYear(); } })();
 let allMode = (() => { try { return localStorage.getItem('pcl-allmode') === 'month' ? 'month' : 'list'; } catch { return 'list'; } })();
 const notesOpen = new Set();
 const optsOpen = new Set(); // cards with Cycle Options open // cards with the notes section open
@@ -555,7 +556,7 @@ const titles = {current: 'Current cycles', complete: 'Completed cycles', all: 'A
 const shown = withStats.filter(({s}) => view === 'all' || (view === 'complete' ? s.status === 'complete' : s.status !== 'complete'));
 const subs = {current: 'Active, paused, and upcoming cycles.', complete: 'Cycles that finished or were ended.', all: 'Every cycle you’ve logged.'};
 const sub = `${subs[view]}${shown.length ? ` ${shown.length} cycle${shown.length === 1 ? '' : 's'}.` : ''}`;
-const seg = view === 'all' && shown.length ? `<div class="seg" role="tablist"><button type="button" role="tab" data-allmode="list" aria-selected="${allMode === 'list'}">List</button><button type="button" role="tab" data-allmode="month" aria-selected="${allMode === 'month'}">By month</button></div>` : '';
+const seg = view === 'all' && shown.length ? `<div class="seg" role="tablist"><button type="button" role="tab" data-allmode="list" aria-selected="${allMode === 'list'}">List</button><button type="button" role="tab" data-allmode="month" aria-selected="${allMode === 'month'}">Timeline</button></div>` : '';
 list.innerHTML = panel(titles[view], sub, shown.length
 ? seg + (view === 'all' && allMode === 'month' ? monthView(shown) : `<div class="rows">${shown.map(x => crow(x, view + '|' + x.c.id)).join('')}</div>`)
 : view === 'complete'
@@ -577,8 +578,11 @@ e.n += c.perDay || 1; e.last = d; m.set(c.id, e);
 });
 });
 if (!months.size) return '<div class="pempty quiet"><h3>No doses scheduled yet.</h3></div>';
+const years = [...new Set([...months.keys()].map(k => Math.floor(k / 12)))].sort((a, b) => b - a);
+if (!years.includes(allYear)) allYear = years.includes(t.getFullYear()) ? t.getFullYear() : years[0];
+const yearBar = `<div class="years" role="tablist" aria-label="Year">${years.map(y => `<button type="button" role="tab" data-allyear="${y}" aria-selected="${y === allYear}">${y}</button>`).join('')}</div>`;
 const md = d => d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
-return `<div class="months">${[...months.keys()].sort((a, b) => b - a).map(k => {
+return yearBar + `<div class="months">${[...months.keys()].filter(k => Math.floor(k / 12) === allYear).sort((a, b) => b - a).map(k => {
 const label = new Date(Math.floor(k / 12), k % 12, 1).toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
 const items = [...months.get(k).values()].sort((a, b) => a.first - b.first || a.c.name.localeCompare(b.c.name));
 const isNow = k === t.getFullYear() * 12 + t.getMonth(), future = k > t.getFullYear() * 12 + t.getMonth();
@@ -1110,6 +1114,7 @@ if (v === 'add' && !keepForm) $('f-name').focus({preventScroll: true});
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
 $('fab').addEventListener('click', () => setView('add'));
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
+$('list').addEventListener('click', e => { const y = e.target.closest('[data-allyear]'); if (!y) return; allYear = parseInt(y.dataset.allyear, 10); try { localStorage.setItem('pcl-allyear', allYear); } catch {} renderList(); });
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-allmode]'); if (!b) return; allMode = b.dataset.allmode; try { localStorage.setItem('pcl-allmode', allMode); } catch {} renderList(); });
 async function saveCycle(next, errId){
 next = normalize(next);

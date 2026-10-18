@@ -584,3 +584,6 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .footbtns{flex-wrap:nowrap;gap:6px;width:100%}
 .footbtns .detbtn{flex:1 1 auto;padding:8px 10px;font-size:.84rem;white-space:nowrap;font-weight:600}
 .footbtns{flex-wrap:wrap}
+.years{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.years button{background:var(--btn);border:1px solid var(--btn-line);color:var(--ink);font-weight:700;font-size:.9rem;padding:7px 16px;border-radius:999px}
+.years button[aria-selected="true"]{background:var(--sel);border-color:var(--sel);color:var(--sel-ink)}
