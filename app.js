@@ -1511,23 +1511,23 @@ const pend = (testers || []).filter(t => t.status === 'pending').length;
 renderList();
 }
 // one-time "What's new" pop-up per user (remembered on the account, so it shows once across devices)
-const WN_ID = '2026-10-18';
-const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">Updates added Oct 18, 2026</p>
-<h3>New features</h3><ul>
-<li>Every-other-day schedule option</li>
-<li>Off-cycle length on each compound, with an <b>Off-Cycle</b> tab showing breaks and expected restart dates</li>
-<li>A “Ready to start again?” banner when a break ends. Nothing restarts without your OK, and you can start now and backdate the start date.</li>
-<li>Red “Needs attention” banner for compounds missing key info, with a Fix button</li>
+const WN_ID = '2026-10-18b', WN_SINCE = '2026-10-18';
+const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">New features added Oct 18, 2026</p>
+<ul>
+<li><b>Every other day</b> schedule option</li>
+<li><b>Off-cycle</b> length on each compound, with an <b>Off-Cycle</b> tab showing breaks and expected restart dates</li>
+<li>A <b>“Ready to start again?”</b> banner when a break ends. Nothing restarts without your OK, and you can start now and backdate the start date.</li>
+<li>Red <b>Needs attention</b> banner for compounds missing key info, with a Fix button</li>
 <li>One-time warning before adding a second active cycle of the same compound</li>
 <li>Date-stamped <b>Notes</b> on each compound, exportable as a text file or PDF</li>
-<li>Light/dark mode toggle (top right)</li></ul>
-<h3>Changes</h3><ul>
-<li>Compound details open as a centered pop-up</li>
-<li>Repeat only shows on completed cycles</li>
-<li>New look: soft white cards, a floating bottom tab bar, a round + button, progress rings and darker blue buttons</li></ul>
-<h3>Fixes</h3><ul>
-<li>Current and All tabs no longer freeze when a compound has no dose</li>
-<li>Editing a compound no longer drops its logged vial dates</li></ul>`;
+<li><b>Options</b> button that groups Change dose, Pause/End Cycle, Edit Cycle and Delete</li>
+<li><b>Change dose</b> lets you enter mg or syringe units and asks you to confirm before saving</li>
+<li>Tap a vial to open a pop-up for starting a new one, with a check of the vial size and BAC water (change it if the new vial is different)</li>
+<li><b>Timeline</b> view in All: pick a year to see the compounds used each month</li>
+<li><b>Share</b> a compound as a styled image with dose, frequency, dates and titration</li>
+<li><b>Share all</b> current compounds in one image from the Current tab</li>
+<li>Light/dark mode toggle (top right)</li>
+</ul>`;
 let wnShown = false;
 function maybeWhatsNew(){
 if (wnShown || !sessionUser || !profile) return;
@@ -1535,7 +1535,7 @@ const key = 'pcl-wn-' + sessionUser.id;
 let local = null; try { local = localStorage.getItem(key); } catch {}
 const meta = (sessionUser.user_metadata || {}).whatsNew;
 if (local === WN_ID || meta === WN_ID) return;
-if (profile.created && profile.created >= Date.parse(WN_ID + 'T07:00:00Z')) { try { localStorage.setItem(key, WN_ID); } catch {} return; } // brand-new accounts skip it
+if (profile.created && profile.created >= Date.parse(WN_SINCE + 'T07:00:00Z')) { try { localStorage.setItem(key, WN_ID); } catch {} return; } // brand-new accounts skip it
 wnShown = true;
 const el = document.createElement('div');
 el.className = 'sheet-wrap anim wn';
