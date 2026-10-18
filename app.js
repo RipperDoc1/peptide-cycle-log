@@ -56,6 +56,7 @@ return out;
 }
 let nxPick = null;
 let dupAck = null;
+let allMode = (() => { try { return localStorage.getItem('pcl-allmode') === 'month' ? 'month' : 'list'; } catch { return 'list'; } })();
 const notesOpen = new Set();
 const optsOpen = new Set(); // cards with Cycle Options open // cards with the notes section open
 const sortedNotes = c => (c.notes || []).slice().sort((a, b) => (b.date + b.at).localeCompare(a.date + a.at));
@@ -554,11 +555,36 @@ const titles = {current: 'Current cycles', complete: 'Completed cycles', all: 'A
 const shown = withStats.filter(({s}) => view === 'all' || (view === 'complete' ? s.status === 'complete' : s.status !== 'complete'));
 const subs = {current: 'Active, paused, and upcoming cycles.', complete: 'Cycles that finished or were ended.', all: 'Every cycle you’ve logged.'};
 const sub = `${subs[view]}${shown.length ? ` ${shown.length} cycle${shown.length === 1 ? '' : 's'}.` : ''}`;
+const seg = view === 'all' && shown.length ? `<div class="seg" role="tablist"><button type="button" role="tab" data-allmode="list" aria-selected="${allMode === 'list'}">List</button><button type="button" role="tab" data-allmode="month" aria-selected="${allMode === 'month'}">By month</button></div>` : '';
 list.innerHTML = panel(titles[view], sub, shown.length
-? `<div class="rows">${shown.map(x => crow(x, view + '|' + x.c.id)).join('')}</div>`
+? seg + (view === 'all' && allMode === 'month' ? monthView(shown) : `<div class="rows">${shown.map(x => crow(x, view + '|' + x.c.id)).join('')}</div>`)
 : view === 'complete'
 ? `<div class="pempty quiet"><h3>No completed cycles yet.</h3></div>`
 : startCta('Set up your protocol', 'Add the peptides you take to build your schedule.'));
+}
+// All cycles grouped by month: each month lists the compounds dosed in it
+function monthView(rows){
+const t = today(), months = new Map();
+rows.forEach(({c, s}) => {
+const stop = isOpen(c) && !c.endedOn ? t : null; // open-ended cycles only count up to today
+s.sched.forEach((d, i) => {
+if (stop && d > stop) return;
+if (!doseDay(c, i, d) || !doseAtIndex(c, i)) return;
+const k = d.getFullYear() * 12 + d.getMonth();
+if (!months.has(k)) months.set(k, new Map());
+const m = months.get(k), e = m.get(c.id) || {c, s, n: 0, first: d, last: d};
+e.n += c.perDay || 1; e.last = d; m.set(c.id, e);
+});
+});
+if (!months.size) return '<div class="pempty quiet"><h3>No doses scheduled yet.</h3></div>';
+const md = d => d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+return `<div class="months">${[...months.keys()].sort((a, b) => b - a).map(k => {
+const label = new Date(Math.floor(k / 12), k % 12, 1).toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+const items = [...months.get(k).values()].sort((a, b) => a.first - b.first || a.c.name.localeCompare(b.c.name));
+const isNow = k === t.getFullYear() * 12 + t.getMonth(), future = k > t.getFullYear() * 12 + t.getMonth();
+return `<section class="month"><div class="mhead"><h3>${label}</h3><span>${isNow ? 'This month · ' : future ? 'Planned · ' : ''}${items.length} compound${items.length === 1 ? '' : 's'}</span></div>
+<div class="mlist">${items.map(e => `<button type="button" class="mitem" data-act="sheet" data-id="${e.c.id}" aria-haspopup="dialog"><span class="mi-main"><span class="mi-name">${esc(e.c.name)}</span><span class="mi-sub">${md(e.first)}${+e.first !== +e.last ? ' – ' + md(e.last) : ''} · ${e.n} dose${e.n === 1 ? '' : 's'}${e.c.dose != null ? ' · ' + num(e.c.dose) + ' ' + e.c.unit : ''}</span></span><span class="pill ${e.s.status}">${e.s.status}</span><span class="chev" aria-hidden="true">\u203a</span></button>`).join('')}</div></section>`;
+}).join('')}</div>`;
 }
 function vialsPanel(rows, panel){
 const items = rows.map(x => ({x, v: vialStatus(x.c)})).filter(r => r.v);
@@ -1084,6 +1110,7 @@ if (v === 'add' && !keepForm) $('f-name').focus({preventScroll: true});
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
 $('fab').addEventListener('click', () => setView('add'));
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
+$('list').addEventListener('click', e => { const b = e.target.closest('[data-allmode]'); if (!b) return; allMode = b.dataset.allmode; try { localStorage.setItem('pcl-allmode', allMode); } catch {} renderList(); });
 async function saveCycle(next, errId){
 next = normalize(next);
 try {
