@@ -608,3 +608,5 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .cfm-actions{justify-content:space-between}
 .cfm-actions .btn{flex:1}
 .cfm-actions .btn{white-space:nowrap;padding-left:12px;padding-right:12px}
+.shareall{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;background:var(--btn);border:1px solid var(--btn-line);color:var(--sel);font-weight:700;font-size:.88rem;padding:8px 14px;border-radius:999px;white-space:nowrap}
+.shareall svg{width:17px;height:17px}

@@ -231,6 +231,63 @@ const text = [`${x.name} — ${x.status}`, `Dose: ${x.dose}${x.doseSub ? ' (' + 
 const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
 return deliver(blob, (c.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'cycle') + '.png', text);
 }
+async function shareAll(list){
+const items = list.map(c => ({c, x: shareData(c)}));
+try { await Promise.all(['400', '500', '600', '700', '800'].map(w => document.fonts.load(`${w} 40px Figtree`))); } catch {}
+const F = (w, px) => `${w} ${px}px Figtree, -apple-system, "Segoe UI", sans-serif`;
+const W = 1080, P = 64, IN = 56, CW = W - P * 2, TW = CW - IN * 2;
+const C = {bg1: '#eaf0fa', bg2: '#f4f4f7', card: '#ffffff', ink: '#15171c', muted: '#7d838f', line: '#eceef2', sel: '#2f5fb3', soft: '#e8f0fc', tile: '#f5f7fb', ok: '#2f8a5b', okSoft: '#e6f4ec', warn: '#a86a12', warnSoft: '#fbf1e1', pause: '#7a5bc7', pauseSoft: '#f1ecfb'};
+const pillOf = k => ({active: [C.okSoft, C.ok], upcoming: [C.warnSoft, C.warn], paused: [C.pauseSoft, C.pause]}[k] || [C.soft, C.sel]);
+const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+const wrap = (text, font, max) => { ctx.font = font; const words = String(text).split(/\s+/), out = []; let line = '';
+words.forEach(w => { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > max && line){ out.push(line); line = w; } else line = t; }); if (line) out.push(line); return out; };
+const rr = (x0, y0, w, h, r) => { ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r); ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r); ctx.arcTo(x0, y0 + h, x0, y0, r); ctx.arcTo(x0, y0, x0 + w, y0, r); ctx.closePath(); };
+const asOf = new Date().toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+const paint = draw => {
+const L = P + IN; let y = P + 56;
+const T = (str, font, color, x0, yy, align) => { if (!draw) return; ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.fillText(str, x0, yy); };
+if (draw){ ctx.fillStyle = C.ink; rr(L, y - 4, 20, 8, 3); ctx.fill(); rr(L - 3, y + 7, 26, 36, 6); ctx.fill(); }
+T('Peptide Log', F(800, 32), C.ink, L + 40, y + 34);
+y += 130;
+T('My current protocol', F(800, 62), C.ink, L, y); y += 50;
+T(`${items.length} compound${items.length === 1 ? '' : 's'} · as of ${asOf}`, F(500, 30), C.muted, L, y); y += 44;
+items.forEach(({x}) => {
+// tile per compound
+const IP = 32, IW = TW - IP * 2;
+ctx.font = F(700, 24); const pw = ctx.measureText(x.status).width + 50;
+const nameLines = wrap(x.name, F(800, 44), IW - pw - 16);
+const doseLine = x.dose + (x.doseSub ? '  ·  ' + x.doseSub : '');
+const doseLines = wrap(doseLine, F(700, 32), IW);
+const dates = `${x.rows[1][1]} – ${x.rows[2][1]}`;
+const info = [['Frequency', x.rows[0][1]], ['Dates', dates]].concat(x.rows[4] ? [['Off-cycle', x.rows[4][1] + ' after']] : []);
+const infoLines = info.map(([k, v]) => ({k, v: wrap(v, F(600, 28), IW - 190)}));
+const titLines = x.steps.length ? wrap('Titration: ' + x.steps.map(st => `${st.when.replace('Weeks', 'Wk').replace('Week', 'Wk')} ${st.dose}`).join('  →  '), F(500, 26), IW) : [];
+const th = IP + nameLines.length * 52 + 14 + doseLines.length * 42 + 16 + infoLines.reduce((a, r) => a + r.v.length * 38 + 6, 0) + (titLines.length ? 10 + titLines.length * 34 : 0) + IP - 10;
+y += 24;
+if (draw){ ctx.fillStyle = C.tile; rr(L, y, TW, th, 30); ctx.fill(); }
+let ty = y + IP;
+nameLines.forEach((l, i) => { T(l, F(800, 44), C.ink, L + IP, ty + 42 + i * 52); });
+const pc = pillOf(x.statusKey);
+if (draw){ ctx.fillStyle = pc[0]; rr(L + TW - IP - pw, ty + 6, pw, 46, 23); ctx.fill(); ctx.fillStyle = pc[1]; ctx.beginPath(); ctx.arc(L + TW - IP - pw + 22, ty + 29, 5, 0, Math.PI * 2); ctx.fill(); }
+T(x.status, F(700, 24), pc[1], L + TW - IP - pw + 36, ty + 38);
+ty += nameLines.length * 52 + 14;
+doseLines.forEach((l, i) => T(l, F(700, 32), C.sel, L + IP, ty + 32 + i * 42)); ty += doseLines.length * 42 + 16;
+infoLines.forEach(r => { T(r.k, F(500, 28), C.muted, L + IP, ty + 30); r.v.forEach((l, i) => T(l, F(600, 28), C.ink, L + IP + 190, ty + 30 + i * 38)); ty += r.v.length * 38 + 6; });
+if (titLines.length){ ty += 10; titLines.forEach((l, i) => T(l, F(500, 26), C.muted, L + IP, ty + 26 + i * 34)); }
+y += th;
+});
+return y + 40 + IN;
+};
+const bottom = paint(false), H = bottom + 100;
+cv.width = W; cv.height = H;
+const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, C.bg1); g.addColorStop(1, C.bg2); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+ctx.save(); ctx.shadowColor = 'rgba(20,30,50,.10)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 12; ctx.fillStyle = C.card; rr(P, P, CW, bottom - P, 48); ctx.fill(); ctx.restore();
+paint(true);
+ctx.font = F(500, 26); ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.fillText('Shared from Peptide Log', W / 2, H - 40);
+const text = [`My current protocol (as of ${asOf})`, ''].concat(...items.map(({x}) => [`${x.name} — ${x.status}`, `  Dose: ${x.dose}${x.doseSub ? ' (' + x.doseSub + ')' : ''}`, `  Frequency: ${x.rows[0][1]}`, `  Dates: ${x.rows[1][1]} – ${x.rows[2][1]}`, ...(x.steps.length ? ['  Titration: ' + x.steps.map(st => `${st.when} ${st.dose}`).join(', ')] : []), ''])).join('\n');
+const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+return deliver(blob, 'current-protocol.png', text);
+}
 let pdfLib = null;
 const loadPdf = () => pdfLib || (pdfLib = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/jspdf-2.5.1.min.js'; sc.onload = () => res(window.jspdf.jsPDF); sc.onerror = () => { pdfLib = null; rej(new Error('load')); }; document.head.appendChild(sc); }));
 async function exportPdf(c){
@@ -686,11 +743,12 @@ const shown = withStats.filter(({s}) => view === 'all' || (view === 'complete' ?
 const subs = {current: 'Active, paused, and upcoming cycles.', complete: 'Cycles that finished or were ended.', all: 'Every cycle you’ve logged.'};
 const sub = `${subs[view]}${shown.length ? ` ${shown.length} cycle${shown.length === 1 ? '' : 's'}.` : ''}`;
 const seg = view === 'all' && shown.length ? `<div class="seg" role="tablist"><button type="button" role="tab" data-allmode="list" aria-selected="${allMode === 'list'}">List</button><button type="button" role="tab" data-allmode="month" aria-selected="${allMode === 'month'}">Timeline</button></div>` : '';
+const shareAllBtn = view === 'current' && shown.length ? `<button type="button" class="shareall" data-shareall="1" aria-label="Share all current cycles"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>Share all</button>` : '';
 list.innerHTML = panel(titles[view], sub, shown.length
 ? seg + (view === 'all' && allMode === 'month' ? monthView(shown) : `<div class="rows">${shown.map(x => crow(x, view + '|' + x.c.id)).join('')}</div>`)
 : view === 'complete'
 ? `<div class="pempty quiet"><h3>No completed cycles yet.</h3></div>`
-: startCta('Set up your protocol', 'Add the peptides you take to build your schedule.'));
+: startCta('Set up your protocol', 'Add the peptides you take to build your schedule.'), shareAllBtn);
 }
 // All cycles grouped by month: each month lists the compounds dosed in it
 function monthView(rows){
@@ -1249,6 +1307,8 @@ if (v === 'add' && !keepForm) $('f-name').focus({preventScroll: true});
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
 $('fab').addEventListener('click', () => setView('add'));
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
+$('list').addEventListener('click', async e => { const b = e.target.closest('[data-shareall]'); if (!b) return; b.disabled = true;
+try { const order = {active: 0, paused: 1, upcoming: 2}; await shareAll(cycles.map(c => ({c, s: stats(c)})).filter(x => x.s.status !== 'complete').sort((a, z) => order[a.s.status] - order[z.s.status] || a.s.start - z.s.start).map(x => x.c)); } catch (err) { console.error(err); } finally { b.disabled = false; } });
 $('list').addEventListener('click', e => { const y = e.target.closest('[data-allyear]'); if (!y) return; allYear = parseInt(y.dataset.allyear, 10); try { localStorage.setItem('pcl-allyear', allYear); } catch {} renderList(); });
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-allmode]'); if (!b) return; allMode = b.dataset.allmode; try { localStorage.setItem('pcl-allmode', allMode); } catch {} renderList(); });
 async function saveCycle(next, errId){
