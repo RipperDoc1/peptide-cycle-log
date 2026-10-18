@@ -667,3 +667,7 @@ header .syncrow .sync{margin-top:0}
 .dtotal{display:block;font-size:.85rem;font-weight:400;color:var(--muted);line-height:1.3}
 .trow .tdose .bu,.upitem .q .u{white-space:nowrap}
 .upitem .q{flex-wrap:wrap;row-gap:0}
+.addicon{width:44px;height:44px;border-radius:50%;border:none;background:var(--sel);color:var(--sel-ink);display:grid;place-items:center;box-shadow:var(--shadow)}
+.addicon svg{width:22px;height:22px}
+.addicon:active{transform:scale(.95)}
+.addrow:has(#fab[hidden]){display:none}

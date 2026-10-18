@@ -1406,6 +1406,7 @@ if (v === 'add' && !keepForm) $('f-name').focus({preventScroll: true});
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
 $('fab').addEventListener('click', () => setView('add'));
+$('addIcon').addEventListener('click', () => setView('add'));
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
 $('list').addEventListener('click', async e => { const b = e.target.closest('[data-shareall]'); if (!b) return; b.disabled = true;
 try { const order = {active: 0, paused: 1, upcoming: 2}; await shareAll(cycles.map(c => ({c, s: stats(c)})).filter(x => x.s.status !== 'complete').sort((a, z) => order[a.s.status] - order[z.s.status] || a.s.start - z.s.start).map(x => x.c)); } catch (err) { console.error(err); } finally { b.disabled = false; } });
@@ -1584,7 +1585,7 @@ const need = phase === 'profile' || (editingProfile && (phase === 'app' || phase
 $('onboard').hidden = !need;
 $('waiting').hidden = phase !== 'waiting' || need;
 const app = phase === 'app' && !need;
-$('nav').hidden = !app; $('fab').hidden = !app || view === 'add';
+$('nav').hidden = !app; $('fab').hidden = !app || view === 'add' || view === 'home'; $('addIcon').hidden = !app || view !== 'home';
 $('listSec').hidden = !app || view === 'add';
 $('form').hidden = !app || view !== 'add';
 const out = sessionUser ? `<button type="button" class="link" id="signOut">Sign out</button>` : '';
