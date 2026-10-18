@@ -16,7 +16,7 @@ let isOwner = false, testers = null, rosterSync = null;
 const LS_PROFILE = 'peptide-profile-v1';
 const collapsed = new Set();   // cards on the Today view whose details the viewer opened (closed by default)
 const openRows = new Set();    // collapsed rows the viewer has expanded
-let selDays = new Set([1,2,3,4,5]);
+let selDays = new Set([1,2,3,4,5]), selEvery = 0;
 let store = null;       // {save(c), remove(id)}
 const offMsg = m => navigator.onLine === false ? 'You\'re offline. Connect to the internet to save changes.' : m;
 // local copy of the last data loaded from the server, so the app opens instantly and works offline (read-only)
@@ -34,6 +34,8 @@ const fmt = d => d.toLocaleDateString(undefined, {month:'short', day:'numeric', 
 const num = n => Number.isInteger(n) ? String(n) : String(+n.toFixed(3));
 const OPEN_AHEAD = 730;
 const isOpen = c => c.lenUnit === 'open';
+// dose day check: 'every other day' cycles count from the start (paused days don't count), others use weekdays
+const doseDay = (c, i, d) => c.interval > 1 ? i % c.interval === 0 : c.days.includes(d.getDay());
 const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
 : c.lenUnit === 'weeks' ? c.lenValue * 7 : c.lenValue;
 function vialLife(c, fromIdx){
@@ -43,7 +45,7 @@ if (fromIdx >= sched.length) return null;
 let used = 0, doses = 0, last = null;
 for (let i = Math.max(fromIdx, 0); i < sched.length; i++){
 const d = sched[i];
-if (!days.has(d.getDay())) continue;
+if (!doseDay(c, i, d)) continue;
 const dv = doseAtIndex(c, i); if (!dv) continue;
 const mg = mgOf(c, dv);
 for (let k = 0; k < per; k++){
@@ -155,7 +157,7 @@ let rem = c.vialMg, opened = parse(c.start), auto = false, ri = 0, i = 0;
 for (; i < sched.length && sched[i] < t; i++){
 const d = sched[i];
 while (ri < refills.length && refills[ri] <= d){ rem = c.vialMg; opened = refills[ri]; auto = false; ri++; }
-if (!days.has(d.getDay())) continue;
+if (!doseDay(c, i, d)) continue;
 const dv = doseAtIndex(c, i); if (!dv) continue;
 const mg = mgOf(c, dv);
 for (let k = 0; k < per; k++){ if (mg > rem + 1e-9){ rem = c.vialMg; opened = d; auto = true; } rem -= mg; }
@@ -164,7 +166,7 @@ while (ri < refills.length && refills[ri] <= t){ rem = c.vialMg; opened = refill
 let r2 = rem, left = 0, runOut = null;
 outer: for (; i < sched.length; i++){
 const d = sched[i];
-if (!days.has(d.getDay())) continue;
+if (!doseDay(c, i, d)) continue;
 const dv = doseAtIndex(c, i); if (!dv) continue;
 const mg = mgOf(c, dv);
 for (let k = 0; k < per; k++){ if (mg > r2 + 1e-9){ runOut = d; break outer; } r2 -= mg; left++; }
@@ -191,7 +193,7 @@ let total = 0, done = 0, next = null, nextIdx = 0, elapsed = 0, doseToday = null
 let totalAmt = c.dose != null ? 0 : null, takenAmt = 0;
 sched.forEach((d, i) => {
 if (d <= t) elapsed = i + 1;
-if (!days.has(d.getDay())) return;
+if (!doseDay(c, i, d)) return;
 const dv = doseAtIndex(c, i);
 if (dv === 0) return;
 total += per;
@@ -226,8 +228,8 @@ else steps.push({from: i, to: i, dose: dv, adjusted: isAdjustedAt(c, i)});
 return { lenDays, span, sched, start, end, total, done, next, nextIdx, status, elapsed, curIdx, curDose,
 doseToday, openPause, endedEarly, pausedDays, steps,
 remaining: Math.max(sched.length - elapsed, 0),
-perWeek: c.days.length * per,
-weeklyAmt: curDose != null ? curDose * c.days.length * per : null,
+perWeek: (c.interval > 1 ? 7 / c.interval : c.days.length) * per,
+weeklyAmt: curDose != null ? curDose * (c.interval > 1 ? 7 / c.interval : c.days.length) * per : null,
 totalAmt,
 totalTaken: c.dose != null ? takenAmt : null,
 vialsTaken: c.dose != null && c.vialMg > 0 && mgOf(c, 1) != null ? mgOf(c, takenAmt) / c.vialMg : null,
@@ -239,10 +241,12 @@ $('days').innerHTML = '';
 [1,2,3,4,5,6,0].forEach(i => {
 const b = document.createElement('button');
 b.type = 'button'; b.className = 'day'; b.textContent = DAYNAME[i];
-b.setAttribute('aria-pressed', selDays.has(i));
-b.onclick = () => { selDays.has(i) ? selDays.delete(i) : selDays.add(i); renderDays(); };
+b.setAttribute('aria-pressed', !selEvery && selDays.has(i));
+b.onclick = () => { if (selEvery){ selEvery = 0; selDays = new Set([i]); } else selDays.has(i) ? selDays.delete(i) : selDays.add(i); renderDays(); };
 $('days').appendChild(b);
 });
+document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset === 'eod' ? !!selEvery : !selEvery && b.dataset.preset === [...selDays].sort().join(',')));
+$('eodNote').hidden = !selEvery;
 }
 const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
 const doseWithUnits = (c, dv) => `${num(dv)} ${c.unit}${sec(c, dv) ? ` (${sec(c, dv)})` : ''}`;
@@ -272,7 +276,7 @@ const pausesHtml = (c.pauses||[]).length ? `<div class="adjlist"><span class="la
 return `<div class="details">
 <div class="grid">
 <div class="kv"><span class="label">Dose / injection</span><b>${s.curDose != null ? doseWithUnits(c, s.curDose) : '—'}</b></div>
-<div class="kv"><span class="label">Doses / wk</span><b>${s.perWeek}</b></div>
+<div class="kv"><span class="label">Doses / wk</span><b>${c.interval > 1 ? "~" + num(+s.perWeek.toFixed(1)) : s.perWeek}</b></div>
 <div class="kv"><span class="label">Per week</span><b>${s.weeklyAmt != null ? num(+s.weeklyAmt.toFixed(3)) + ' ' + c.unit : '—'}${(c.unit === 'units' || c.unit === 'mL') && mgOf(c, s.weeklyAmt) != null ? ` (${num(+mgOf(c, s.weeklyAmt).toFixed(3))} mg)` : ''}</b></div>
 ${isOpen(c) && !s.endedEarly ? `
 <div class="kv"><span class="label">Doses taken</span><b>${s.done}</b></div>
@@ -373,7 +377,7 @@ const d = addDays(t, k), items = [];
 withStats.forEach(({c, s}) => {
 if (s.status === 'complete') return;
 const i = s.sched.findIndex(x => +x === +d);
-if (i < 0 || !c.days.includes(d.getDay())) return;
+if (i < 0 || !doseDay(c, i, d)) return;
 const dv = doseAtIndex(c, i); if (!dv) return;
 items.push({c, dv, x: withStats.find(w => w.c === c)});
 });
@@ -513,7 +517,7 @@ ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
-<div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span><div class="wk">${wk}</div></div>
+<div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span>${c.interval > 1 ? '<b>Every other day</b>' : `<div class="wk">${wk}</div>`}</div>
 </div>
 ${lifeLine}</div>` + detailsBlock(c, s) : ''}
 <div class="foot"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button>${acts}</div>
@@ -526,7 +530,7 @@ editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
 $('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg';
-selDays = new Set([1,2,3,4,5]); renderDays();
+selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
 syncTit(); updateCalc();
@@ -538,7 +542,7 @@ $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
-selDays = new Set(c.days); renderDays();
+selDays = new Set(c.days); selEvery = c.interval > 1 ? c.interval : 0; renderDays();
 $('f-premix').checked = !!c.premixed;
 if (c.premixed){ $('f-pml').value = c.bacMl ?? ''; $('f-pconc').value = c.vialMg > 0 && c.bacMl > 0 ? +(c.vialMg / c.bacMl).toFixed(6) : ''; $('f-vial').value = ''; $('f-bac').value = ''; }
 else { $('f-vial').value = c.vialMg ?? ''; $('f-bac').value = c.bacMl ?? ''; $('f-pml').value = ''; $('f-pconc').value = ''; }
@@ -570,7 +574,7 @@ if (!name) return $('err').textContent = 'Enter the peptide name.';
 if (!start) return $('err').textContent = 'Pick a start date.';
 const openLen = $('f-lenunit').value === 'open';
 if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length must be at least 1.';
-if (!selDays.size) return $('err').textContent = 'Select at least one day of the week.';
+if (!selEvery && !selDays.size) return $('err').textContent = 'Select at least one day of the week.';
 if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
 const fv = formVial(), premixed = $('f-premix').checked;
@@ -595,7 +599,7 @@ plan.push(r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose
 }
 const existing = editingId && cycles.find(c => c.id === editingId);
 const c = { id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
-name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: [...selDays].sort(),
+name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: selEvery ? [0,1,2,3,4,5,6] : [...selDays].sort(), interval: selEvery || null,
 dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, vialMg, bacMl, premixed: premixed && vialMg != null,
 titrate, plan,
 pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
@@ -794,7 +798,7 @@ const titrate = $('f-tit').checked;
 const plan = titrate ? titSteps.filter(r => r.dose != null && r.dose >= 0 && rowIdx(r) != null && rowIdx(r) > 0 && rowIdx(r) < formLen())
 .map(r => r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose: r.dose}) : [];
 return normalize({start: $('f-start').value, lenValue: parseInt($('f-len').value, 10) || 0, lenUnit: $('f-lenunit').value,
-days: [...selDays], perDay: parseInt($('f-perday').value, 10) || 1, dose: optNum('f-dose'), unit: $('f-unit').value,
+days: selEvery ? [0,1,2,3,4,5,6] : [...selDays], interval: selEvery || null, perDay: parseInt($('f-perday').value, 10) || 1, dose: optNum('f-dose'), unit: $('f-unit').value,
 vialMg: formVial().mg, bacMl: formVial().ml, titrate, plan,
 pauses: existing ? existing.pauses : [], endedOn: existing ? existing.endedOn : null});
 }
@@ -879,7 +883,9 @@ $('form').addEventListener('input', updateVials);
 $('form').addEventListener('change', updateVials);
 $('form').addEventListener('click', e => { if (e.target.closest('.day,[data-preset],[data-rm],#addStep,#addSet')) setTimeout(updateVials); });
 document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
-selDays = new Set(b.dataset.preset.split(',').map(Number)); renderDays();
+if (b.dataset.preset === 'eod'){ selEvery = 2; selDays = new Set([0,1,2,3,4,5,6]); }
+else { selEvery = 0; selDays = new Set(b.dataset.preset.split(',').map(Number)); }
+renderDays();
 });
 function setView(v, keepForm){
 if (v === 'add' && view !== 'add') prevView = view;
