@@ -572,6 +572,7 @@ s.sched.forEach((d, i) => {
 if (stop && d > stop) return;
 if (!doseDay(c, i, d) || !doseAtIndex(c, i)) return;
 const k = d.getFullYear() * 12 + d.getMonth();
+if (k > t.getFullYear() * 12 + t.getMonth()) return; // timeline stops at the current month
 if (!months.has(k)) months.set(k, new Map());
 const m = months.get(k), e = m.get(c.id) || {c, s, n: 0, first: d, last: d};
 e.n += c.perDay || 1; e.last = d; m.set(c.id, e);
