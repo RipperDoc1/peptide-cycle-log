@@ -588,6 +588,12 @@ $('eodNote').hidden = !selEvery;
 }
 const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
 // dose for display, always mg first when it can be worked out (units / mL doses show mg, then the amount entered)
+// light 'total per day' line for compounds dosed more than once a day
+function dayTotal(c, dv){
+const per = c.perDay || 1; if (per < 2 || dv == null) return '';
+const t = dosePair(c, dv * per);
+return `Total ${t.main}/day`;
+}
 function dosePair(c, dv){
 if (dv == null) return {main: 'Dose not set', sub: ''};
 if (isNasal(c) && c.spMl > 0){
@@ -629,7 +635,8 @@ const stepsHtml = s.steps.length > 1 ? `<div class="kv"><span class="label">Titr
 const pausesHtml = (c.pauses||[]).length ? `<div class="adjlist"><span class="label">Pauses · ${s.pausedDays} day${s.pausedDays === 1 ? '' : 's'} total</span>${c.pauses.map((p, i) => `<div><span>${fmt(parse(p.from))} – ${p.to ? fmt(parse(p.to)) : 'now'}</span><button class="link del" data-act="pause-rm" data-id="${c.id}" data-i="${i}">Remove</button></div>`).join('')}</div>` : '';
 return `<div class="details">
 <div class="grid">
-<div class="kv"><span class="label">Dose / injection</span><b>${s.curDose != null ? doseWithUnits(c, s.curDose) : '—'}</b></div>
+<div class="kv"><span class="label">${isNasal(c) ? 'Dose / spray time' : 'Dose / injection'}</span><b>${s.curDose != null ? doseWithUnits(c, s.curDose) : '—'}</b></div>
+${(c.perDay || 1) > 1 && s.curDose != null ? `<div class="kv"><span class="label">Total per day · ${c.perDay}×</span><b>${doseWithUnits(c, s.curDose * c.perDay)}</b></div>` : ''}
 <div class="kv"><span class="label">Doses / wk</span><b>${c.interval > 1 ? "~" + num(+s.perWeek.toFixed(1)) : s.perWeek}</b></div>
 <div class="kv"><span class="label">Per week</span><b>${s.weeklyAmt != null ? num(+s.weeklyAmt.toFixed(3)) + ' ' + c.unit : '—'}${(c.unit === 'units' || c.unit === 'mL') && mgOf(c, s.weeklyAmt) != null ? ` (${num(+mgOf(c, s.weeklyAmt).toFixed(3))} mg)` : ''}</b></div>
 ${isOpen(c) && !s.endedEarly ? `
@@ -752,7 +759,7 @@ const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 
 const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show next 3 days' : `Show next 7 days${hidden ? ` (${hidden} more day${hidden === 1 ? '' : 's'})` : ''}`}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span></div>`).join('')}</div>
+<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 + (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
@@ -930,7 +937,7 @@ const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
 return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
-${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${per > 1 ? ` \u00d7 ${per}` : ''}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</span><span class="cline">${prog}</span></span>
+${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${per > 1 ? ` \u00d7 ${per}` : ''}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</span>${dayTotal(c, s.doseToday) ? `<span class="dtotal">${dayTotal(c, s.doseToday)}</span>` : ''}</span>
 <span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 function card({c, s}, open){

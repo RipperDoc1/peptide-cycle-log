@@ -664,3 +664,6 @@ header .syncrow .sync{margin-top:0}
 .setitem{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--btn);border:1px solid var(--btn-line);color:var(--ink);font-weight:600;font-size:.98rem;padding:13px 16px;border-radius:var(--r-md)}
 .setitem span{color:var(--muted);font-size:1.3rem;line-height:1}
 .setitem.danger{color:var(--danger)}
+.dtotal{display:block;font-size:.85rem;font-weight:400;color:var(--muted);line-height:1.3}
+.trow .tdose .bu,.upitem .q .u{white-space:nowrap}
+.upitem .q{flex-wrap:wrap;row-gap:0}
