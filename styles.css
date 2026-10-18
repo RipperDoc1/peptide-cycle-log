@@ -523,3 +523,4 @@ header{position:relative}.hright{position:absolute;top:-6px;right:0}
 .upitem .q{flex-direction:column;align-items:flex-start;gap:0}.upitem .q .u{line-height:1.3}
 .uplist.bubbles .upday{grid-template-columns:4.2em minmax(0,1fr)}
 .upitem .q{flex-direction:row;align-items:baseline;gap:8px;flex-wrap:nowrap}.upitem .q b{font-weight:500;color:var(--ink)}.upitem .q .u{white-space:nowrap}
+.upitem .n{font-weight:600;font-size:.97rem}
