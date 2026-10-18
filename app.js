@@ -35,6 +35,17 @@ const num = n => Number.isInteger(n) ? String(n) : String(+n.toFixed(3));
 const OPEN_AHEAD = 730;
 const isOpen = c => c.lenUnit === 'open';
 // dose day check: 'every other day' cycles count from the start (paused days don't count), others use weekdays
+// off-cycle: break after a cycle ends; the next round only starts once the user confirms
+const offDaysOf = c => c.offValue > 0 && !isOpen(c) ? (c.offUnit === 'days' ? c.offValue : c.offValue * 7) : 0;
+const offLabel = c => c.offUnit === 'days' ? `${c.offValue}-day` : `${c.offValue}-week`;
+function offInfo(c, s){
+const od = offDaysOf(c); if (!od || c.nextId || c.noRepeat) return null;
+s = s || stats(c); if (s.status !== 'complete') return null;
+const last = s.endedEarly ? addDays(parse(c.endedOn), -1) : s.end, from = addDays(last, 1), due = addDays(from, od), t = today();
+return {from, due, days: od, ready: due <= t, left: diff(t, due), elapsed: Math.min(Math.max(diff(from, t), 0), od),
+snoozed: !!(c.snoozeUntil && parse(c.snoozeUntil) > t)};
+}
+let nxPick = null; // off-cycle item whose start-date picker is open
 const doseDay = (c, i, d) => c.interval > 1 ? i % c.interval === 0 : c.days.includes(d.getDay());
 const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
 : c.lenUnit === 'weeks' ? c.lenValue * 7 : c.lenValue;
@@ -398,7 +409,10 @@ const alertBox = waiting.length ? `<section class="panel approvals"><div class="
 <div class="d"><b>${esc(r.name)}</b><span class="tg">@${esc(r.telegram || '')}</span><span>Signed up ${fmt(new Date(r.joined))}</span></div>
 <div class="tact"><button class="btn" data-tact="approved" data-id="${r.id}">Approve</button><button class="btn ghost" data-tact="paused" data-id="${r.id}">Pause</button></div>
 </div>`).join('')}</div></div></section>` : '';
-list.innerHTML = alertBox + panel('Today', todaySub, todayBody, badge)
+const ready = withStats.map(x => ({...x, o: offInfo(x.c, x.s)})).filter(x => x.o && x.o.ready && !x.o.snoozed);
+const readyBox = ready.map(({c, o}) => `<section class="panel readybox"><div class="phead"><div><h2>Ready to start ${esc(c.name)} again?</h2><p>Your ${offLabel(c)} off-cycle ${o.left === 0 ? 'ends today' : 'ended ' + fmt(o.due)}. The next round won’t start until you confirm.</p></div></div>
+<div class="pbody">${nxControls(c, o, 'home')}<div class="actions" style="margin-top:6px"><button class="link" data-act="nx-snooze" data-id="${c.id}">Not yet</button><button class="link del" data-act="nx-stop" data-id="${c.id}">Stop repeating</button></div></div></section>`).join('');
+list.innerHTML = alertBox + readyBox + panel('Today', todaySub, todayBody, badge)
 + panel('Upcoming', upMore ? 'Your scheduled doses for the next 7 days.' : 'Your scheduled doses for the next 3 days.', upBody)
 + vialsPanel(withStats.filter(x => x.s.status !== 'complete'), panel);
 return;
@@ -418,6 +432,22 @@ rows.length ? `<div class="uplist">${rows.map(r => `<div class="upday" style="gr
 + `<button class="btn ghost del" data-tdelask="${r.id}">Delete</button>`}</div>
 </div>`).join('')}</div>`
 : `<div class="pempty quiet"><h3>No testers yet.</h3><p>Send people the link. They sign in with their email, and you approve them here.</p></div>`);
+return;
+}
+if (view === 'upcoming'){
+const offs = withStats.map(x => ({...x, o: offInfo(x.c, x.s)})).filter(x => x.o).sort((a, b) => a.o.due - b.o.due);
+const sched = withStats.filter(x => x.s.status === 'upcoming');
+const offHtml = offs.map(({c, o}) => `<div class="offrow">
+<div class="offtop"><div><div class="cname">${esc(c.name)}</div><div class="cline">${o.ready ? 'Off-cycle done · ready to start' : `Off-cycle · ${o.left} day${o.left === 1 ? '' : 's'} left`}</div></div>
+<div class="offdue"><span class="label">${o.ready ? 'Was due' : 'Next round'}</span><b>${fmt(o.due)}</b></div></div>
+<div class="track"><div class="fill" style="width:${Math.round(o.elapsed / o.days * 100)}%"></div></div>
+<div class="progtext"><span>Off since ${fmt(o.from)}</span><span>${offLabel(c)} break</span></div>
+${nxControls(c, o, 'up')}
+<div class="actions"><button class="link del" data-act="nx-stop" data-id="${c.id}">Stop repeating</button></div>
+</div>`).join('');
+list.innerHTML = panel('Off-cycle', offs.length ? 'Cycles on a break, with when the next round is due. Nothing starts until you confirm.' : '',
+offs.length ? `<div class="offlist">${offHtml}</div>` : `<div class="pempty quiet"><h3>Nothing on an off-cycle.</h3><p>Add an off-cycle length to a cycle and it shows up here when the cycle ends.</p></div>`)
++ (sched.length ? panel('Scheduled to start', 'Cycles with a start date in the future.', `<div class="rows">${sched.map(x => crow(x, 'up|' + x.c.id)).join('')}</div>`) : '');
 return;
 }
 const titles = {current: 'Current cycles', complete: 'Completed cycles', all: 'All cycles'};
@@ -456,10 +486,27 @@ ${on ? `<div class="refill">
 </div>` : ''}
 </div>`; }).join('')}</div>`);
 }
+function nxControls(c, o, where){
+const key = where + '|' + c.id, open = nxPick === key, min = iso(o.from);
+return open ? `<div class="nxpick"><div class="field"><label class="label" for="nx-date">Started on</label><input id="nx-date" type="date" min="${min}" value="${iso(today())}"></div>
+<div class="actions"><button class="btn" data-act="nx-go" data-id="${c.id}">Start next round</button><button class="btn ghost" data-act="nx-cancel" data-id="${c.id}">Cancel</button><span class="err" id="nx-err"></span></div></div>`
+: `<div class="actions">${o.ready ? `<button class="btn" data-act="nx-today" data-id="${c.id}">Start today</button>` : ''}<button class="btn ${o.ready ? 'ghost' : ''}" data-act="nx-pick" data-key="${key}" data-id="${c.id}">${o.ready ? 'Pick a start date' : 'Start now'}</button></div>`;
+}
+async function startNext(c, dateIso){
+const plan = (c.plan || []).map(p => p.week != null ? p : {week: Math.floor(idxOfDate(c, parse(p.date)) / 7) + 1, dose: p.dose}).filter(p => p.week >= 2);
+const nc = normalize({...c, id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), start: dateIso, plan,
+pauses: [], endedOn: null, refills: [], nextId: null, noRepeat: false, snoozeUntil: null, created: Date.now()});
+await store.save(nc);
+cycles.push(nc);
+const oc = normalize({...c, nextId: nc.id});
+try { await store.save(oc); cycles = cycles.map(x => x.id === c.id ? oc : x); } catch {}
+nxPick = null; view = 'home'; setView('home');
+}
 function crow(x, key){
 const {c, s} = x, on = openRows.has(key);
 let line;
 if (s.status === 'paused') line = `Paused since ${fmt(parse(s.openPause.from))}`;
+else if (s.status === 'complete' && offInfo(c, s)){ const o = offInfo(c, s); line = o.ready ? 'Off-cycle done · ready for next round' : `Off-cycle · next round ${fmt(o.due)}`; }
 else if (s.status === 'complete') line = s.endedEarly ? `Ended ${fmt(parse(c.endedOn))}` : `Finished ${fmt(s.end)}`;
 else if (s.status === 'upcoming') line = `Starts ${dayWord(s.start)}`;
 else if (s.doseToday != null) line = `Due today · ${doseWithUnits(c, s.doseToday)}`;
@@ -517,6 +564,7 @@ ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
+${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'wk' : 'wks')}</b></div>` : ''}
 <div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span>${c.interval > 1 ? '<b>Every other day</b>' : `<div class="wk">${wk}</div>`}</div>
 </div>
 ${lifeLine}</div>` + detailsBlock(c, s) : ''}
@@ -529,7 +577,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg';
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks';
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -540,7 +588,7 @@ $('cancelBtn').hidden = false; $('err').textContent = '';
 function fillForm(c, asNew){
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
-$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; syncLen();
+$('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
 selDays = new Set(c.days); selEvery = c.interval > 1 ? c.interval : 0; renderDays();
 $('f-premix').checked = !!c.premixed;
@@ -576,6 +624,8 @@ const openLen = $('f-lenunit').value === 'open';
 if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length must be at least 1.';
 if (!selEvery && !selDays.size) return $('err').textContent = 'Select at least one day of the week.';
 if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
+const offRaw = $('f-off').value.trim(), offValue = offRaw === '' || openLen ? null : parseInt(offRaw, 10);
+if (offValue != null && !(offValue >= 0)) return $('err').textContent = 'Off-cycle length must be a whole number, or leave it blank.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
 const fv = formVial(), premixed = $('f-premix').checked;
 if (fv.partial) return $('err').textContent = premixed ? 'Enter both the vial size in mL and the concentration, or leave both blank.' : 'Enter both vial size and BAC water, or leave both blank.';
@@ -598,7 +648,8 @@ plan.push(r.kind === 'week' ? {week: r.week, dose: r.dose} : {date: r.date, dose
 }
 }
 const existing = editingId && cycles.find(c => c.id === editingId);
-const c = { id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
+const c = { ...(existing || {}), id: editingId || ('c' + Date.now().toString(36) + Math.random().toString(36).slice(2,6)),
+offValue: offValue > 0 ? offValue : null, offUnit: $('f-offunit').value,
 name, start, lenValue: openLen ? null : lenValue, lenUnit: $('f-lenunit').value, days: selEvery ? [0,1,2,3,4,5,6] : [...selDays].sort(), interval: selEvery || null,
 dose, unit: $('f-unit').value, perDay: parseInt($('f-perday').value, 10) || 1, vialMg, bacMl, premixed: premixed && vialMg != null,
 titrate, plan,
@@ -629,7 +680,7 @@ const formLen = () => {
 if ($('f-lenunit').value === 'open'){ const st = $('f-start').value; return (st ? Math.max(diff(parse(st), today()), 0) : 0) + OPEN_AHEAD; }
 const v = parseInt($('f-len').value, 10) || 0; return $('f-lenunit').value === 'weeks' ? v * 7 : v;
 };
-function syncLen(){ const o = $('f-lenunit').value === 'open'; $('f-len').hidden = o; $('f-lenunit').hidden = o; $('f-open').checked = o; $('openNote').hidden = !o; }
+function syncLen(){ const o = $('f-lenunit').value === 'open'; $('offField').hidden = o; $('f-len').hidden = o; $('f-lenunit').hidden = o; $('f-open').checked = o; $('openNote').hidden = !o; }
 $('f-open').addEventListener('change', () => { const sel = $('f-lenunit'); sel.value = $('f-open').checked ? 'open' : 'weeks'; if (!$('f-open').checked && !(parseInt($('f-len').value, 10) > 0)) $('f-len').value = 8; sel.dispatchEvent(new Event('change', {bubbles: true})); });
 $('f-lenunit').addEventListener('change', syncLen);
 function rowIdx(s){
@@ -910,6 +961,21 @@ cycId = null; renderList();
 $('list').addEventListener('click', async e => {
 const b = e.target.closest('[data-act]'); if (!b) return;
 const c = cycles.find(x => x.id === b.dataset.id);
+if (b.dataset.act && b.dataset.act.startsWith('nx-')){
+const act = b.dataset.act, msg = m => { const e = $('nx-err'); if (e) e.textContent = m; else $('sync').textContent = m; };
+try {
+if (act === 'nx-pick'){ nxPick = b.dataset.key; renderList(); const d = $('nx-date'); if (d) d.focus(); return; }
+if (act === 'nx-cancel'){ nxPick = null; renderList(); return; }
+if (act === 'nx-today'){ b.disabled = true; return await startNext(c, iso(today())); }
+if (act === 'nx-go'){ const v = $('nx-date').value, o = offInfo(c);
+if (!v) return msg('Pick the date you started.');
+if (o && v < iso(o.from)) return msg(`Pick a date after the last round ended (${fmt(addDays(o.from, -1))}).`);
+b.disabled = true; return await startNext(c, v); }
+if (act === 'nx-snooze'){ await saveCycle({...c, snoozeUntil: iso(addDays(today(), 1))}, 'err'); return; }
+if (act === 'nx-stop'){ await saveCycle({...c, noRepeat: true}, 'err'); return; }
+} catch { b.disabled = false; msg(offMsg('Couldn\'t start the next round. Try again.')); }
+return;
+}
 if (b.dataset.act === 'sheet'){ sheetId = b.dataset.id; sheetFresh = true; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'sheet-close'){ sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }

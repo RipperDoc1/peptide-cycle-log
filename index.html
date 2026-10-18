@@ -72,10 +72,11 @@
 <nav class="nav" id="nav" aria-label="Views" hidden>
 <button type="button" data-view="home" aria-current="page">Today</button>
 <button type="button" data-view="current">Current</button>
-<button type="button" data-view="complete">Completed</button>
+<button type="button" data-view="upcoming">Upcoming</button>
+<button type="button" data-view="complete"><span class="lg">Completed</span><span class="sm">Done</span></button>
 <button type="button" data-view="all">All</button>
 <button type="button" data-view="testers" id="navTesters" hidden>Testers</button>
-<button type="button" data-view="add" class="addbtn" aria-label="Add cycle">+ Add<span class="full"> cycle</span></button>
+<button type="button" data-view="add" class="addbtn" aria-label="Add cycle">+<span class="lbl"> Add<span class="full"> cycle</span></span></button>
 </nav>
 <form class="form" id="form" novalidate hidden>
 <h2 id="formTitle">New cycle</h2>
@@ -96,6 +97,14 @@
 </div>
 <label class="chk" for="f-open"><input type="checkbox" id="f-open"> Open cycle (no end date)</label>
 <span class="hint" id="openNote" hidden>Runs until you end it with Change cycle.</span>
+</div>
+<div class="field c2" id="offField">
+<label class="label" for="f-off">Off-cycle length</label>
+<div class="inline">
+<input id="f-off" type="number" min="0" step="1" placeholder="None" inputmode="numeric">
+<select id="f-offunit" aria-label="Off-cycle length unit"><option value="weeks">wks</option><option value="days">days</option></select>
+</div>
+<span class="hint">Optional break before the next round. You confirm before it starts.</span>
 </div>
 <div class="field c2">
 <label class="label" for="f-dose" id="doseLabel">Dose</label>

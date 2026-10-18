@@ -317,3 +317,24 @@ html.sheet-open, html.sheet-open body{overflow:hidden}
 .sheet-wrap.anim .sheet{animation:sheetpop .22s cubic-bezier(.2,.8,.2,1)}
 @keyframes sheetpop{from{opacity:0;transform:scale(.94)}}
 @media (min-width:700px){.sheet-wrap.anim .sheet{animation:sheetpop .22s cubic-bezier(.2,.8,.2,1)}}
+
+.readybox{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft),var(--shadow)}
+.offlist{display:flex;flex-direction:column;gap:12px}
+.offrow{background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.offtop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.offrow .cname{font-weight:600;font-size:1.05rem}
+.offrow .cline{color:var(--muted);font-size:.88rem}
+.offdue{text-align:right;display:flex;flex-direction:column;line-height:1.25}
+.offrow .track{background:var(--surface)}
+.offrow .actions .link.del{margin-left:auto}
+.nxpick{display:flex;flex-direction:column;gap:10px}
+@media (max-width:560px){
+.nav{padding:4px;justify-content:space-between}
+.nav button{padding:7px 7px;font-size:.78rem}
+.nav .addbtn{margin-left:2px;width:34px;height:34px;padding:0;border-radius:50%;font-size:1.25rem;line-height:1;display:grid;place-items:center;box-shadow:none}
+.nav .addbtn .lbl{display:none}
+}
+.offdue .label{white-space:nowrap}
+.nav .sm{display:none}
+@media (max-width:560px){.nav .lg{display:none}.nav .sm{display:inline}.nav button{padding:7px 6px;font-size:.76rem}}
+@media (max-width:560px){.nav button{font-size:13px;padding:7px 5px}.nav{gap:0}}
