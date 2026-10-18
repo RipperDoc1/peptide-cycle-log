@@ -351,7 +351,7 @@ const doseWithUnits = (c, dv) => dv == null ? 'dose not set' : `${num(dv)} ${c.u
 function todayBlock(c, s){
 const per = c.perDay || 1, x = per > 1 ? `<span class="tx">× ${per} injections</span>` : '';
 if (s.status === 'paused')
-return `<div class="today paused"><span class="label">Paused</span><div class="big">Paused since ${fmt(parse(s.openPause.from))}</div><span class="tx">No doses until you resume. Use Change cycle to resume.</span></div>`;
+return `<div class="today paused"><span class="label">Paused</span><div class="big">Paused since ${fmt(parse(s.openPause.from))}</div><span class="tx">No doses until you resume. Use Pause/End Cycle to resume.</span></div>`;
 if (s.status === 'complete')
 return `<div class="today done"><span class="label">${s.endedEarly ? 'Ended early' : 'Finished'}</span><div class="big">${s.endedEarly ? 'Ended ' + fmt(parse(c.endedOn)) : 'Finished ' + fmt(s.end)}</div>${s.curDose != null ? `<span class="tx">Last dose level ${num(s.curDose)} ${c.unit}</span>` : ''}</div>`;
 if (s.status === 'upcoming'){
@@ -662,7 +662,7 @@ const adjForm = adjustId === c.id ? `<div class="adjust">
 </div>` : '';
 const acts = confirmId === c.id
 ? `<span class="confirm">Delete this cycle? <button class="link del" data-act="del-yes" data-id="${c.id}">Delete</button><button class="link" data-act="del-no">Keep</button></span>`
-: `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link" data-act="chg" data-id="${c.id}">Change dose</button>` : ''}<button class="link" data-act="cy" data-id="${c.id}">Change cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del" data-act="del" data-id="${c.id}">Delete</button></div>`;
+: `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link" data-act="chg" data-id="${c.id}">Change dose</button>` : ''}<button class="link" data-act="cy" data-id="${c.id}">Pause/End Cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit Cycle</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del" data-act="del" data-id="${c.id}">Delete</button></div>`;
 return `<article class="cyc ${s.status}">
 <div class="band"></div>
 <div class="body">
