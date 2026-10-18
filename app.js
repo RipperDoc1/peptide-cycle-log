@@ -535,7 +535,7 @@ const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
 return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
-<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}${per > 1 ? ` <span class="bu">× ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
+${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}</span><span class="tdose">${num(s.doseToday)} ${c.unit}${sx ? ` <span class="bu">${sx}</span>` : ''}${per > 1 ? ` <span class="bu">× ${per}</span>` : ''}</span><span class="cline">${prog}</span></span>
 <span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 function card({c, s}, open){
@@ -977,6 +977,7 @@ window.scrollTo({top: 0});
 if (v === 'add' && !keepForm) $('f-name').focus({preventScroll: true});
 }
 $('nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setView(b.dataset.view); });
+$('fab').addEventListener('click', () => setView('add'));
 $('list').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
 async function saveCycle(next, errId){
 next = normalize(next);
@@ -1106,7 +1107,7 @@ const need = phase === 'profile' || (editingProfile && (phase === 'app' || phase
 $('onboard').hidden = !need;
 $('waiting').hidden = phase !== 'waiting' || need;
 const app = phase === 'app' && !need;
-$('nav').hidden = !app;
+$('nav').hidden = !app; $('fab').hidden = !app || view === 'add';
 $('listSec').hidden = !app || view === 'add';
 $('form').hidden = !app || view !== 'add';
 const out = sessionUser ? `<button type="button" class="link" id="signOut">Sign out</button>` : '';
@@ -1132,7 +1133,7 @@ $('waitSub').textContent = blocked
 }
 $('navTesters').hidden = !isOwner;
 const pend = (testers || []).filter(t => t.status === 'pending').length;
-$('navTesters').textContent = pend ? `Testers (${pend})` : 'Testers';
+{ const t = $('navTesters'); t.querySelector('span').textContent = 'Testers'; let d = t.querySelector('.ndot'); if (pend){ if (!d){ d = document.createElement('i'); d.className = 'ndot'; t.appendChild(d); } d.textContent = pend; } else if (d) d.remove(); }
 renderList();
 }
 async function loadAll(){

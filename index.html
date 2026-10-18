@@ -23,6 +23,7 @@
 <div class="wrap">
 <header>
 <div>
+<div class="brand"><span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="8" y="2" width="8" height="4" rx="1.2"/><path d="M7 7.5c0-.8.7-1.5 1.5-1.5h7c.8 0 1.5.7 1.5 1.5V20a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z"/></svg></span>Peptide Log</div>
 <h1 id="greet">Hello, Tim.</h1>
 <p class="sub"><span id="todayStr"></span><span id="asOf"></span><span id="whoami" hidden></span></p>
 </div>
@@ -70,14 +71,14 @@
 </section>
 <div class="loading" id="loading">Loading…</div>
 <nav class="nav" id="nav" aria-label="Views" hidden>
-<button type="button" data-view="home" aria-current="page">Today</button>
-<button type="button" data-view="current">Current</button>
-<button type="button" data-view="upcoming">Off-Cycle</button>
-<button type="button" data-view="complete"><span class="lg">Completed</span><span class="sm">Done</span></button>
-<button type="button" data-view="all">All</button>
-<button type="button" data-view="testers" id="navTesters" hidden>Testers</button>
-<button type="button" data-view="add" class="addbtn" aria-label="Add cycle">+<span class="lbl"> Add<span class="full"> cycle</span></span></button>
+<button type="button" data-view="home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg><span>Today</span></button>
+<button type="button" data-view="current"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Current</span></button>
+<button type="button" data-view="upcoming"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg><span>Off-Cycle</span></button>
+<button type="button" data-view="complete"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 10"/></svg><span>Done</span></button>
+<button type="button" data-view="all"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg><span>All</span></button>
+<button type="button" data-view="testers" id="navTesters" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c2 .6 3.2 2.3 3.5 5.2"/></svg><span>Testers</span></button>
 </nav>
+<button type="button" class="fab" id="fab" data-view="add" aria-label="Add cycle" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
 <form class="form" id="form" novalidate hidden>
 <h2 id="formTitle">New cycle</h2>
 <div class="field c6">
