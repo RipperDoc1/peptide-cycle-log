@@ -55,7 +55,78 @@ else if ((c.unit === 'units' || c.unit === 'mL') && c.dose != null && !(c.vialMg
 return out;
 }
 let nxPick = null;
-let dupAck = null; // compound name the user already confirmed as an intentional duplicate // off-cycle item whose start-date picker is open
+let dupAck = null;
+const notesOpen = new Set(); // cards with the notes section open
+const sortedNotes = c => (c.notes || []).slice().sort((a, b) => (b.date + b.at).localeCompare(a.date + a.at));
+function notesBlock(c){
+const list = sortedNotes(c);
+return `<div class="notes">
+<div class="noteadd"><div class="field"><label class="label" for="nt-date-${c.id}">Date</label><input type="date" id="nt-date-${c.id}" value="${iso(today())}"></div>
+<div class="field"><label class="label" for="nt-text-${c.id}">Note</label><textarea id="nt-text-${c.id}" rows="3" maxlength="2000" placeholder="How it's going, side effects, injection site, anything worth remembering"></textarea></div>
+<div class="actions"><button class="btn" data-act="nt-add" data-id="${c.id}">Add note</button><span class="err" id="nt-err-${c.id}"></span></div></div>
+${list.length ? `<div class="notelist">${list.map(n => `<div class="note"><div class="nhead"><b>${fmt(parse(n.date))}</b><button class="link del" data-act="nt-del" data-id="${c.id}" data-nid="${n.id}">Delete</button></div><p>${esc(n.text).replace(/\n/g, '<br>')}</p></div>`).join('')}</div>` : '<p class="hint" style="margin:0">No notes yet.</p>'}
+<div class="actions noteexp"><span class="label">Export</span><button class="btn ghost" data-act="nt-txt" data-id="${c.id}">Text file</button><button class="btn ghost" data-act="nt-pdf" data-id="${c.id}">PDF</button></div>
+</div>`;
+}
+// summary used by note exports
+function freqText(c){
+const per = c.perDay || 1, perTx = per > 1 ? `, ${per}× a day` : '';
+let days;
+if (c.interval > 1) days = 'Every other day';
+else if ((c.days || []).length === 7) days = 'Daily';
+else { const ord = [1,2,3,4,5,6,0].filter(i => c.days.includes(i)); days = ord.map(i => DAYNAME[i]).join(', '); }
+const dose = c.dose != null ? ` · ${doseWithUnits(c, c.dose)} per injection` : '';
+return days + perTx + dose;
+}
+function exportInfo(c){
+const s = stats(c);
+const end = s.endedEarly ? `${fmt(parse(c.endedOn))} (ended early)` : isOpen(c) ? 'Open-ended (no end date)' : fmt(s.end);
+const fmtY = d => d.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+return {name: c.name, start: fmtY(s.start), end: s.endedEarly ? fmtY(parse(c.endedOn)) + ' (ended early)' : isOpen(c) ? 'Open-ended (no end date)' : fmtY(s.end),
+freq: freqText(c), notes: sortedNotes(c).slice().reverse().map(n => ({date: fmtY(parse(n.date)), text: n.text}))};
+}
+const fileBase = c => (c.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'cycle') + '-notes';
+async function deliver(blob, filename){
+const file = new File([blob], filename, {type: blob.type});
+if (navigator.canShare && navigator.canShare({files: [file]})){ try { await navigator.share({files: [file], title: filename}); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+const url = URL.createObjectURL(blob), a = document.createElement('a');
+a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function exportTxt(c){
+const x = exportInfo(c);
+const lines = [x.name, '='.repeat(Math.max(x.name.length, 8)), `Cycle start: ${x.start}`, `Cycle end:   ${x.end}`, `Frequency:   ${x.freq}`, '', `Notes (${x.notes.length})`, '-'.repeat(12)];
+x.notes.forEach(n => { lines.push(n.date); lines.push(n.text); lines.push(''); });
+if (!x.notes.length) lines.push('No notes.');
+return deliver(new Blob([lines.join('\n')], {type: 'text/plain'}), fileBase(c) + '.txt');
+}
+let pdfLib = null;
+const loadPdf = () => pdfLib || (pdfLib = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/jspdf-2.5.1.min.js'; sc.onload = () => res(window.jspdf.jsPDF); sc.onerror = () => { pdfLib = null; rej(new Error('load')); }; document.head.appendChild(sc); }));
+async function exportPdf(c){
+const jsPDF = await loadPdf(), x = exportInfo(c);
+const doc = new jsPDF({unit: 'pt', format: 'letter'}), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 54;
+let y = M;
+const need = h => { if (y + h > H - M){ doc.addPage(); y = M; } };
+doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.text(x.name, M, y + 8); y += 30;
+doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(120); doc.text(`Exported ${new Date().toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})} · Peptide Log`, M, y); y += 22;
+doc.setTextColor(20);
+[['Cycle start', x.start], ['Cycle end', x.end], ['Frequency', x.freq]].forEach(([k, v]) => {
+doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(k, M, y);
+doc.setFont('helvetica', 'normal'); const vl = doc.splitTextToSize(v, W - M * 2 - 90); doc.text(vl, M + 90, y); y += 16 * vl.length;
+});
+y += 10; doc.setDrawColor(220); doc.line(M, y, W - M, y); y += 24;
+doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(`Notes (${x.notes.length})`, M, y); y += 20;
+if (!x.notes.length){ doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.text('No notes.', M, y); }
+x.notes.forEach(n => {
+const body = doc.setFont('helvetica', 'normal').setFontSize(11).splitTextToSize(n.text, W - M * 2);
+need(18 + body.length * 15 + 12);
+doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(47, 95, 179); doc.text(n.date, M, y); y += 16;
+doc.setFont('helvetica', 'normal'); doc.setTextColor(20);
+body.forEach(line => { need(15); doc.text(line, M, y); y += 15; });
+y += 12;
+});
+return deliver(doc.output('blob'), fileBase(c) + '.pdf');
+} // compound name the user already confirmed as an intentional duplicate // off-cycle item whose start-date picker is open
 const doseDay = (c, i, d) => c.interval > 1 ? i % c.interval === 0 : c.days.includes(d.getDay());
 const lenOf = c => isOpen(c) ? (c.start ? Math.max(diff(parse(c.start), today()), 0) : 0) + OPEN_AHEAD
 : c.lenUnit === 'weeks' ? c.lenValue * 7 : c.lenValue;
@@ -581,7 +652,8 @@ ${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>$
 <div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span>${c.interval > 1 ? '<b>Every other day</b>' : `<div class="wk">${wk}</div>`}</div>
 </div>
 ${lifeLine}</div>` + detailsBlock(c, s) : ''}
-<div class="foot"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button>${acts}</div>
+${notesOpen.has(c.id) ? notesBlock(c) : ''}
+<div class="foot"><div class="footbtns"><button class="detbtn" data-act="det" data-id="${c.id}" aria-expanded="${open}">${open ? 'Hide detailed info' : 'Detailed info'}</button><button class="detbtn" data-act="notes" data-id="${c.id}" aria-expanded="${notesOpen.has(c.id)}">Notes${(c.notes || []).length ? ` (${c.notes.length})` : ''}</button></div>${acts}</div>
 </div>
 </article>`;
 }
@@ -1009,6 +1081,17 @@ if (b.dataset.act === 'sheet'){ sheetId = b.dataset.id; sheetFresh = true; cycId
 if (b.dataset.act === 'sheet-close'){ sheetId = null; cycId = null; adjustId = null; confirmId = null; renderList(); return; }
 if (b.dataset.act === 'row'){ const k = b.dataset.key; openRows.has(k) ? openRows.delete(k) : openRows.add(k); renderList(); return; }
 switch (b.dataset.act){
+case 'notes': notesOpen.has(c.id) ? notesOpen.delete(c.id) : notesOpen.add(c.id); renderList(); break;
+case 'nt-add': {
+const txt = $('nt-text-' + c.id).value.trim(), date = $('nt-date-' + c.id).value || iso(today());
+if (!txt){ $('nt-err-' + c.id).textContent = 'Write a note first.'; break; }
+const note = {id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), date, at: new Date().toISOString(), text: txt};
+await saveCycle({...c, notes: [...(c.notes || []), note]}, 'nt-err-' + c.id);
+break;
+}
+case 'nt-del': await saveCycle({...c, notes: (c.notes || []).filter(n => n.id !== b.dataset.nid)}, 'nt-err-' + c.id); break;
+case 'nt-txt': exportTxt(c); break;
+case 'nt-pdf': b.disabled = true; try { await exportPdf(c); } catch { const e = $('nt-err-' + c.id); if (e) e.textContent = offMsg('Couldn\'t make the PDF. Try again.'); } finally { b.disabled = false; } break;
 case 'det': {
 const homeRunning = view === 'home' && ['active','paused'].includes(stats(c).status);
 const set = homeRunning ? collapsed : expanded;
@@ -1271,6 +1354,16 @@ sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true
 sb.auth.onAuthStateChange(evt => { if (evt === 'SIGNED_IN' || evt === 'SIGNED_OUT') setTimeout(loadAll); });
 loadAll();
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetId){ sheetId = null; renderList(); } });
+// light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
+(function themeToggle(){
+const btn = $('themeBtn'), mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+const cur = () => document.documentElement.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light');
+const sync = () => { const t = cur(); btn.setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'); btn.dataset.mode = t;
+document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', t === 'dark' ? '#0f1115' : '#f3f3f6')); };
+btn.addEventListener('click', () => { const t = cur() === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('pcl-theme', t); } catch {} sync(); });
+if (mq && mq.addEventListener) mq.addEventListener('change', sync);
+sync();
+})();
 window.addEventListener('online', () => { if (phase === 'app') loadAll(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
