@@ -498,7 +498,7 @@ const adjForm = adjustId === c.id ? `<div class="adjust">
 </div>` : '';
 const acts = confirmId === c.id
 ? `<span class="confirm">Delete this cycle? <button class="link del" data-act="del-yes" data-id="${c.id}">Delete</button><button class="link" data-act="del-no">Keep</button></span>`
-: `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link" data-act="chg" data-id="${c.id}">Change dose</button>` : ''}<button class="link" data-act="cy" data-id="${c.id}">Change cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit</button><button class="link" data-act="dup" data-id="${c.id}">Repeat</button><button class="link del" data-act="del" data-id="${c.id}">Delete</button></div>`;
+: `<div class="row-actions">${s.status === 'active' || s.status === 'upcoming' ? `<button class="link" data-act="chg" data-id="${c.id}">Change dose</button>` : ''}<button class="link" data-act="cy" data-id="${c.id}">Change cycle</button><button class="link" data-act="edit" data-id="${c.id}">Edit</button>${s.status === 'complete' ? `<button class="link" data-act="dup" data-id="${c.id}">Repeat</button>` : ''}<button class="link del" data-act="del" data-id="${c.id}">Delete</button></div>`;
 return `<article class="cyc ${s.status}">
 <div class="band"></div>
 <div class="body">
