@@ -498,3 +498,11 @@ header > div:first-child{min-width:0;flex:1}
 .hright{flex:0 0 auto}
 header .sync{display:block;margin-top:6px}
 header{position:relative}.hright{position:absolute;top:-6px;right:0}
+
+.wn-body{padding:0 24px 24px}
+.wn-title{margin:0;font-weight:800;font-size:1.6rem;letter-spacing:-.02em}
+.wn-sub{margin:2px 0 10px;color:var(--muted)}
+.wn-body h3{margin:18px 0 6px;font-size:1rem;font-weight:800;color:var(--sel)}
+.wn-body ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.wn-body li{line-height:1.4}
+.wn-body .actions{margin-top:20px;justify-content:flex-end}

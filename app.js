@@ -1219,6 +1219,44 @@ const pend = (testers || []).filter(t => t.status === 'pending').length;
 { const t = $('navTesters'); t.querySelector('span').textContent = 'Testers'; let d = t.querySelector('.ndot'); if (pend){ if (!d){ d = document.createElement('i'); d.className = 'ndot'; t.appendChild(d); } d.textContent = pend; } else if (d) d.remove(); }
 renderList();
 }
+// one-time "What's new" pop-up per user (remembered on the account, so it shows once across devices)
+const WN_ID = '2026-10-18';
+const WN_HTML = `<h2 class="wn-title">What’s new</h2><p class="wn-sub">Updates added Oct 18, 2026</p>
+<h3>New features</h3><ul>
+<li>Every-other-day schedule option</li>
+<li>Off-cycle length on each compound, with an <b>Off-Cycle</b> tab showing breaks and expected restart dates</li>
+<li>A “Ready to start again?” banner when a break ends. Nothing restarts without your OK, and you can start now and backdate the start date.</li>
+<li>Red “Needs attention” banner for compounds missing key info, with a Fix button</li>
+<li>One-time warning before adding a second active cycle of the same compound</li>
+<li>Date-stamped <b>Notes</b> on each compound, exportable as a text file or PDF</li>
+<li>Light/dark mode toggle (top right)</li></ul>
+<h3>Changes</h3><ul>
+<li>Compound details open as a centered pop-up</li>
+<li>Repeat only shows on completed cycles</li>
+<li>New look: soft white cards, a floating bottom tab bar, a round + button, progress rings and darker blue buttons</li></ul>
+<h3>Fixes</h3><ul>
+<li>Current and All tabs no longer freeze when a compound has no dose</li>
+<li>Editing a compound no longer drops its logged vial dates</li></ul>`;
+let wnShown = false;
+function maybeWhatsNew(){
+if (wnShown || !sessionUser || !profile) return;
+const key = 'pcl-wn-' + sessionUser.id;
+let local = null; try { local = localStorage.getItem(key); } catch {}
+const meta = (sessionUser.user_metadata || {}).whatsNew;
+if (local === WN_ID || meta === WN_ID) return;
+if (profile.created && profile.created >= Date.parse(WN_ID + 'T07:00:00Z')) { try { localStorage.setItem(key, WN_ID); } catch {} return; } // brand-new accounts skip it
+wnShown = true;
+const el = document.createElement('div');
+el.className = 'sheet-wrap anim wn';
+el.innerHTML = `<div class="sheet-bg" data-wn-close></div><div class="sheet" role="dialog" aria-modal="true" aria-label="What’s new"><div class="sheet-bar"><button type="button" class="sheet-x" data-wn-close aria-label="Close">\u2715</button></div><div class="wn-body">${WN_HTML}<div class="actions"><button type="button" class="btn" data-wn-close>Got it</button></div></div></div>`;
+document.body.appendChild(el); document.documentElement.classList.add('sheet-open');
+el.addEventListener('click', e => {
+if (!e.target.closest('[data-wn-close]')) return;
+el.remove(); if (!sheetId) document.documentElement.classList.remove('sheet-open');
+try { localStorage.setItem(key, WN_ID); } catch {}
+try { const r = sb.auth.updateUser && sb.auth.updateUser({data: {whatsNew: WN_ID}}); if (r && r.catch) r.catch(() => {}); } catch {}
+});
+}
 async function loadAll(){
 const cache = readCache();
 let fromCache = false;
@@ -1249,7 +1287,7 @@ if (e2) throw e2;
 cycles = (rows || []).map(r => normalize({...r.data, id: r.id}));
 if (isOwner) loadTesters();
 $('sync').textContent = 'Synced to your account';
-phase = 'app'; gate(); writeCache();
+phase = 'app'; gate(); writeCache(); maybeWhatsNew();
 } catch (err) {
 offline();
 }
