@@ -105,7 +105,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-rout
 document.addEventListener('change', e => { if (e.target.id === 'f-perday') updateNasal(); });
 document.addEventListener('click', e => { if (e.target.closest('.day,[data-preset]')) setTimeout(updateNasal); });
 // change-dose helpers: enter the new dose in the cycle's unit or the other one (mg <-> syringe units), then confirm
-let adjMode = null, adjDraft = null, adjConfirm = null;
+let adjMode = null, adjDraft = null, adjConfirm = null, unpId = null;
 const concOf = c => c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
 const altUnit = c => !concOf(c) ? null : (c.unit === 'mg' || c.unit === 'mcg') ? 'units' : c.unit === 'units' ? 'mg' : null;
 function toBase(c, v, mode){
@@ -698,6 +698,16 @@ $('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${vialFresh ? '
 <div class="vs-body">${vialRow(vc, vv, true)}</div></div></div>`);
 vialFresh = false;
 }
+if (unpId){ const uc = cycles.find(x => x.id === unpId), us = uc && stats(uc);
+if (!uc || us.status !== 'paused') unpId = null;
+else { document.documentElement.classList.add('sheet-open');
+$('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap anim cfm"><div class="sheet-bg" data-act="unp-cancel"></div>
+<div class="sheet cfmbox" role="dialog" aria-modal="true" aria-label="Resume ${esc(uc.name)}"><div class="cfm-body">
+<span class="label">Resume cycle</span><h3>${esc(uc.name)}</h3>
+<div class="field"><label class="label" for="unp-date">Resume on</label><input id="unp-date" type="date" min="${us.openPause.from}" value="${iso(today())}"></div>
+<span class="hint">Paused since ${fmt(parse(us.openPause.from))}. Paused days don’t count, so the end date moves back by the days paused.</span>
+<div class="actions cfm-actions"><button class="btn ghost" data-act="unp-cancel">Cancel</button><button class="btn" data-act="unp-go" data-id="${uc.id}">Resume</button></div>
+<span class="err" id="unp-err"></span></div></div></div>`); } }
 if (!show) return;
 $('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${sheetFresh ? ' anim' : ''}"><div class="sheet-bg" data-act="sheet-close"></div>
 <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(c.name)}"><div class="sheet-bar"><span class="sheet-grab" aria-hidden="true"></span><button type="button" class="sheet-x" data-act="sheet-close" aria-label="Close">✕</button></div>
@@ -746,7 +756,7 @@ const days = [];
 for (let k = 1; k <= 7; k++){
 const d = addDays(t, k), items = [];
 withStats.forEach(({c, s}) => {
-if (s.status === 'complete') return;
+if (s.status === 'complete' || s.status === 'paused') return;
 const i = s.sched.findIndex(x => +x === +d);
 if (i < 0 || !doseDay(c, i, d)) return;
 const dv = doseAtIndex(c, i); if (!dv) return;
@@ -762,7 +772,7 @@ const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">$
 <div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
-+ (withStats.some(x => x.s.status === 'paused') ? `<div class="upnote">Paused: ${withStats.filter(x => x.s.status === 'paused').map(x => esc(x.c.name)).join(', ')}</div>` : '');
+;
 const waiting = isOwner ? (testers || []).filter(r => r.status === 'pending') : [];
 const alertBox = waiting.length ? `<section class="panel approvals"><div class="phead"><div><h2>${waiting.length === 1 ? '1 person is' : waiting.length + ' people are'} waiting for approval</h2><p>New sign-ups can’t use the app until you approve them.</p></div></div>
 <div class="pbody"><div class="uplist">${waiting.map(r => `<div class="upday" style="grid-template-columns:minmax(0,1fr) auto;align-items:center">
@@ -775,7 +785,9 @@ const readyBox = ready.map(({c, o}) => `<section class="panel readybox"><div cla
 const needs = withStats.filter(x => x.s.status !== 'complete').map(x => ({c: x.c, m: missing(x.c)})).filter(x => x.m.length);
 const needBox = needs.length ? `<section class="panel attn" role="alert"><div class="phead"><div><h2>Needs attention</h2><p>${needs.length === 1 ? 'This compound is' : 'These compounds are'} missing information, so doses or vial counts can’t be shown.</p></div></div>
 <div class="pbody"><div class="attnlist">${needs.map(({c, m}) => `<div class="attnrow"><div><b>${esc(c.name)}</b><span>${m.join(' · ')}</span></div><button class="btn" data-act="edit" data-id="${c.id}">Fix</button></div>`).join('')}</div></div></section>` : '';
-list.innerHTML = alertBox + needBox + readyBox + panel('Today', todaySub, todayBody, badge)
+const pausedRows = withStats.filter(x => x.s.status === 'paused');
+const pausedBox = pausedRows.length ? panel('Paused', '', `<div class="pausedlist">${pausedRows.map(({c}) => `<div class="pauserow"><button type="button" class="pname" data-act="sheet" data-id="${c.id}">${esc(c.name)}</button><button type="button" class="btn unpause" data-act="unp" data-id="${c.id}">Unpause</button></div>`).join('')}</div>`) : '';
+list.innerHTML = alertBox + needBox + readyBox + panel('Today', todaySub, todayBody, badge) + pausedBox
 + panel('Upcoming', upMore ? 'Your scheduled doses for the next 7 days.' : 'Your scheduled doses for the next 3 days.', upBody)
 + vialsPanel(withStats.filter(x => x.s.status !== 'complete'), panel);
 return;
@@ -1436,6 +1448,16 @@ b.disabled = true; return await startNext(c, v); }
 if (act === 'nx-snooze'){ await saveCycle({...c, snoozeUntil: iso(addDays(today(), 1))}, 'err'); return; }
 if (act === 'nx-stop'){ await saveCycle({...c, noRepeat: true}, 'err'); return; }
 } catch { b.disabled = false; msg(offMsg('Couldn\'t start the next round. Try again.')); }
+return;
+}
+if (b.dataset.act === 'unp'){ unpId = b.dataset.id; renderList(); return; }
+if (b.dataset.act === 'unp-cancel'){ unpId = null; renderList(); return; }
+if (b.dataset.act === 'unp-go'){
+const c = cycles.find(x => x.id === b.dataset.id), r = $('unp-date').value;
+if (!r){ $('unp-err').textContent = 'Pick the date you resume.'; return; }
+const pauses = (c.pauses || []).map(p => { if (p.to) return p; const to = iso(addDays(parse(r), -1)); return to < p.from ? null : {from: p.from, to}; }).filter(Boolean);
+b.disabled = true; unpId = null;
+await saveCycle({...c, pauses}, 'unp-err');
 return;
 }
 if (b.dataset.act === 'vsheet'){ vialSheetId = b.dataset.id; vialFresh = true; rfEdit.delete(b.dataset.id); renderList(); return; }
