@@ -1728,9 +1728,18 @@ const pend = (testers || []).filter(t => t.status === 'pending').length;
 renderList();
 }
 // one-time "What's new" pop-up per user (remembered on the account, so it shows once across devices)
-const WN_ID = 'v1.2', WN_SINCE = '2026-10-18';
+const WN_ID = 'v1.3', WN_SINCE = '2026-10-18';
 const WN_HTML = `<h2 class="wn-title">What’s new</h2>
-<p class="wn-ver">Update 1.2</p>
+<p class="wn-ver">Update 1.3</p>
+<ul>
+<li><b>Time of day</b> for each compound: Morning, Afternoon or Night (up to your doses per day)</li>
+<li><b>Today</b> is grouped into color-coded Morning, Afternoon and Night sections</li>
+<li><b>Pick time</b> button on Today to set times for compounds you already have</li>
+<li><b>Alternate times</b> for once-a-day compounds: choose AM, PM or Night for each weekday, or rotate through them</li>
+<li><b>Paused</b> box under Today lists paused compounds, with an <b>Unpause</b> button and resume date</li>
+<li>Paused compounds no longer show in Upcoming</li>
+</ul>
+<p class="wn-ver prev">Update 1.2</p>
 <ul>
 <li><b>Delivery route</b> on every compound: Subcutaneous, Intramuscular or Nasal, shown as a tag on Today</li>
 <li><b>Nasal spray</b> setup: bottle size, spray volume, and sprays per nostril or a desired mcg dose (rounded up to full sprays), with bottle tracking by sprays left</li>
