@@ -59,6 +59,17 @@ let nxPick = null;
 let dupAck = null;
 // delivery route: subcutaneous / intramuscular / nasal. Nasal doses are stored as mL (sprays x 2 nostrils x mL per spray).
 let selRoute = 'subq';
+// time of day: optional morning / afternoon / night tags; Today groups doses by them
+let selTod = new Set();
+const TOD = {am: 'Morning', pm: 'Afternoon', night: 'Night', any: 'Anytime'};
+const TOD_ICON = {
+am: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 9V2"/><path d="m4.2 10.2 1.4 1.4"/><path d="M1 18h2"/><path d="M21 18h2"/><path d="m18.4 11.6 1.4-1.4"/><path d="M23 22H1"/><path d="m8 6 4-4 4 4"/></svg>',
+pm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2.5M12 20v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M1.5 12H4M20 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg>',
+night: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
+any: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'};
+const todsOf = c => (c.times || []).filter(t => TOD[t] && t !== 'any');
+function syncTod(){ document.querySelectorAll('[data-tod]').forEach(b => b.setAttribute('aria-pressed', String(selTod.has(b.dataset.tod)))); }
+document.addEventListener('click', e => { const b = e.target.closest('[data-tod]'); if (!b) return; const t = b.dataset.tod; selTod.has(t) ? selTod.delete(t) : selTod.add(t); syncTod(); });
 const ROUTES = {subq: ['SubQ', 'Subcutaneous'], im: ['IM', 'Intramuscular'], nasal: ['Nasal', 'Nasal spray']};
 const routeOf = c => ROUTES[c.route] ? c.route : 'subq';
 const isNasal = c => c.route === 'nasal';
@@ -105,7 +116,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-rout
 document.addEventListener('change', e => { if (e.target.id === 'f-perday') updateNasal(); });
 document.addEventListener('click', e => { if (e.target.closest('.day,[data-preset]')) setTimeout(updateNasal); });
 // change-dose helpers: enter the new dose in the cycle's unit or the other one (mg <-> syringe units), then confirm
-let adjMode = null, adjDraft = null, adjConfirm = null, unpId = null;
+let adjMode = null, adjDraft = null, adjConfirm = null, unpId = null, todPick = null;
 const concOf = c => c.vialMg > 0 && c.bacMl > 0 ? c.vialMg / c.bacMl : null;
 const altUnit = c => !concOf(c) ? null : (c.unit === 'mg' || c.unit === 'mcg') ? 'units' : c.unit === 'units' ? 'mg' : null;
 function toBase(c, v, mode){
@@ -698,6 +709,16 @@ $('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${vialFresh ? '
 <div class="vs-body">${vialRow(vc, vv, true)}</div></div></div>`);
 vialFresh = false;
 }
+if (todPick){ const tc = cycles.find(x => x.id === todPick.id);
+if (!tc) todPick = null;
+else { document.documentElement.classList.add('sheet-open');
+$('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${todPick.fresh ? ' anim' : ''} cfm"><div class="sheet-bg" data-act="tod-cancel"></div>
+<div class="sheet cfmbox" role="dialog" aria-modal="true" aria-label="Time of day for ${esc(tc.name)}"><div class="cfm-body">
+<span class="label">When do you take it?</span><h3>${esc(tc.name)}</h3>
+<div class="todpick">${['am', 'pm', 'night'].map(k => `<button type="button" class="todopt tod-${k}${todPick.sel.has(k) ? ' on' : ''}" data-act="tod-toggle" data-tod-k="${k}" aria-pressed="${todPick.sel.has(k)}"><span class="todi">${TOD_ICON[k]}</span>${TOD[k]}</button>`).join('')}</div>
+<span class="hint">Pick one or more${(tc.perDay || 1) > 1 ? ` (you take it ${tc.perDay}× a day)` : ''}.</span>
+<div class="actions cfm-actions"><button class="btn ghost" data-act="tod-cancel">Cancel</button><button class="btn" data-act="tod-save" data-id="${tc.id}">Save</button></div>
+<span class="err" id="tod-err"></span></div></div></div>`); todPick.fresh = false; } }
 if (unpId){ const uc = cycles.find(x => x.id === unpId), us = uc && stats(uc);
 if (!uc || us.status !== 'paused') unpId = null;
 else { document.documentElement.classList.add('sheet-open');
@@ -750,7 +771,13 @@ const todaySub = !cycles.length ? 'Your daily doses appear here.'
 const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
 ? startCta('Set up your protocol', 'Add the peptides you take to build your schedule. Today’s doses, progress, and vial counts will show up here.')
-: due.length ? `<div class="rows">${due.map(x => trow(x, 'home|' + x.c.id)).join('')}</div>`
+: due.length ? (() => {
+const groups = {am: [], pm: [], night: [], any: []};
+due.forEach(x => { const t = todsOf(x.c); (t.length ? t : ['any']).forEach(k => groups[k].push({x, split: t.length > 1})); });
+const used = Object.keys(groups).filter(k => groups[k].length);
+if (used.length === 1 && used[0] === 'any') return `<div class="rows">${due.map(x => trow(x, 'home|' + x.c.id)).join('')}</div>`;
+return `<div class="todgroups">${used.map(k => `<section class="todg tod-${k}"><div class="todh"><span class="todi" aria-hidden="true">${TOD_ICON[k]}</span><span>${TOD[k]}</span><span class="todn">${groups[k].length}</span></div><div class="rows">${groups[k].map(({x, split}) => trow(x, 'home|' + k + '|' + x.c.id, split)).join('')}</div></section>`).join('')}</div>`;
+})()
 : `<div class="pempty quiet"><h3>No dose today</h3>${nextUp ? `<p>Next: ${esc(nextUp.c.name)} ${dayWord(nextUp.s.next)} · ${doseWithUnits(nextUp.c, doseAtIndex(nextUp.c, nextUp.s.nextIdx))}</p>` : '<p>Nothing scheduled.</p>'}</div>`;
 const days = [];
 for (let k = 1; k <= 7; k++){
@@ -944,13 +971,13 @@ return `<div class="crow"><button type="button" class="crowhead" data-act="sheet
 <span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 // Today: compact row (name, today's dose, day x of y, days left); tap to open the full card
-function trow(x, key){
-const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), per = c.perDay || 1;
+function trow(x, key, split){
+const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), times = todsOf(c).length, per = split ? Math.max(1, Math.round((c.perDay || 1) / times)) : (c.perDay || 1);
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
 return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
-${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${per > 1 ? ` \u00d7 ${per}` : ''}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</span>${dayTotal(c, s.doseToday) ? `<span class="dtotal">${dayTotal(c, s.doseToday)}</span>` : ''}</span>
-<span class="chev" aria-hidden="true">›</span></button></div>`;
+${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${per > 1 ? ` \u00d7 ${per}` : ''}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</span>${!split && dayTotal(c, s.doseToday) ? `<span class="dtotal">${dayTotal(c, s.doseToday)}</span>` : ''}</span>
+<span class="chev" aria-hidden="true">›</span></button>${key.startsWith('home') && !todsOf(c).length ? `<button type="button" class="pickt" data-act="tod-pick" data-id="${c.id}">${TOD_ICON.any}<span>Pick time</span></button>` : ''}</div>`;
 }
 function card({c, s}, open){
 const open_ = isOpen(c);
@@ -1011,7 +1038,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; syncRoute();
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; selTod = new Set(); syncTod(); syncRoute();
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -1024,7 +1051,7 @@ clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep();
-selRoute = routeOf(c);
+selRoute = routeOf(c); selTod = new Set(todsOf(c)); syncTod();
 if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; nasMode = c.nasMode === 'mcg' ? 'mcg' : 'sprays'; $('n-mcg').value = c.nasMcg > 0 ? c.nasMcg : ''; }
 else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; } syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
@@ -1119,6 +1146,7 @@ titrate, plan,
 pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
 created: existing ? existing.created : Date.now() };
 if (nas) Object.assign(c, nas); else { c.route = selRoute; delete c.spMl; }
+c.times = ['am', 'pm', 'night'].filter(t => selTod.has(t));
 $('submitBtn').disabled = true;
 try {
 await store.save(c);
@@ -1450,6 +1478,12 @@ if (act === 'nx-stop'){ await saveCycle({...c, noRepeat: true}, 'err'); return; 
 } catch { b.disabled = false; msg(offMsg('Couldn\'t start the next round. Try again.')); }
 return;
 }
+if (b.dataset.act === 'tod-pick'){ todPick = {id: b.dataset.id, sel: new Set(), fresh: true}; renderList(); return; }
+if (b.dataset.act === 'tod-cancel'){ todPick = null; renderList(); return; }
+if (b.dataset.act === 'tod-toggle'){ const k = b.dataset.todK; todPick.sel.has(k) ? todPick.sel.delete(k) : todPick.sel.add(k); renderList(); return; }
+if (b.dataset.act === 'tod-save'){ if (!todPick.sel.size){ $('tod-err').textContent = 'Pick at least one time.'; return; }
+const c = cycles.find(x => x.id === b.dataset.id), times = ['am', 'pm', 'night'].filter(t => todPick.sel.has(t)); todPick = null;
+await saveCycle({...c, times}, 'err'); return; }
 if (b.dataset.act === 'unp'){ unpId = b.dataset.id; renderList(); return; }
 if (b.dataset.act === 'unp-cancel'){ unpId = null; renderList(); return; }
 if (b.dataset.act === 'unp-go'){

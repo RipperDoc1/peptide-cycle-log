@@ -145,6 +145,15 @@
 <select id="f-perday"><option value="1">Once a day</option><option value="2">2× a day</option><option value="3">3× a day</option><option value="4">4× a day</option></select>
 <span class="hint" id="perdayHint">The dose above is per injection.</span>
 </div>
+<div class="field c6">
+<span class="label" id="todLabel">Time of day</span>
+<div class="days tod" id="tod" role="group" aria-labelledby="todLabel">
+<button type="button" class="day" data-tod="am" aria-pressed="false">Morning</button>
+<button type="button" class="day" data-tod="pm" aria-pressed="false">Afternoon</button>
+<button type="button" class="day" data-tod="night" aria-pressed="false">Night</button>
+</div>
+<span class="hint">Optional. Pick one or more. Today groups your doses by these.</span>
+</div>
 <div class="sect c6 inj"><span class="label">Vial</span><span class="hint">Optional. Fill in to see syringe units and how many vials you need.</span></div>
 <label class="toggle c6 tight inj" for="f-premix"><input type="checkbox" id="f-premix"> <span><strong>Premixed</strong><span class="hint">Already a liquid, no reconstituting needed.</span></span></label>
 <div class="field c3 recon inj">
