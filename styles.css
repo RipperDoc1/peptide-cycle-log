@@ -706,3 +706,4 @@ header .syncrow .sync{margin-top:0}
 .todopt .todi{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff}
 .todopt.tod-am .todi{background:var(--am)}.todopt.tod-pm .todi{background:var(--pm)}.todopt.tod-night .todi{background:var(--night)}
 .todopt.on::after{content:"\2713";margin-left:auto;font-weight:800}
+#todHint.warn{color:var(--danger)}

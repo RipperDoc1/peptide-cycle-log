@@ -68,8 +68,18 @@ pm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 night: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
 any: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'};
 const todsOf = c => (c.times || []).filter(t => TOD[t] && t !== 'any');
-function syncTod(){ document.querySelectorAll('[data-tod]').forEach(b => b.setAttribute('aria-pressed', String(selTod.has(b.dataset.tod)))); }
-document.addEventListener('click', e => { const b = e.target.closest('[data-tod]'); if (!b) return; const t = b.dataset.tod; selTod.has(t) ? selTod.delete(t) : selTod.add(t); syncTod(); });
+const todMax = () => parseInt($('f-perday').value, 10) || 1;
+function syncTod(msg){
+const max = todMax();
+if (selTod.size > max) selTod = new Set(['am', 'pm', 'night'].filter(t => selTod.has(t)).slice(0, max));
+document.querySelectorAll('[data-tod]').forEach(b => b.setAttribute('aria-pressed', String(selTod.has(b.dataset.tod))));
+const h = $('todHint'); if (h){ h.textContent = msg || `Optional. Pick up to ${max} (${max === 1 ? 'once a day' : max + '× a day'}). Today groups your doses by these.`; h.classList.toggle('warn', !!msg); }
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-tod]'); if (!b) return; const t = b.dataset.tod, max = todMax();
+if (selTod.has(t)) { selTod.delete(t); return syncTod(); }
+if (selTod.size >= max) return syncTod(`You take it ${max === 1 ? 'once a day' : max + '× a day'}, so you can pick ${max === 1 ? 'only one time' : 'up to ' + max + ' times'}. Unselect one first, or raise doses per day.`);
+selTod.add(t); syncTod(); });
+document.addEventListener('change', e => { if (e.target.id === 'f-perday') syncTod(); });
 const ROUTES = {subq: ['SubQ', 'Subcutaneous'], im: ['IM', 'Intramuscular'], nasal: ['Nasal', 'Nasal spray']};
 const routeOf = c => ROUTES[c.route] ? c.route : 'subq';
 const isNasal = c => c.route === 'nasal';
@@ -716,7 +726,7 @@ $('list').insertAdjacentHTML('beforeend', `<div class="sheet-wrap${todPick.fresh
 <div class="sheet cfmbox" role="dialog" aria-modal="true" aria-label="Time of day for ${esc(tc.name)}"><div class="cfm-body">
 <span class="label">When do you take it?</span><h3>${esc(tc.name)}</h3>
 <div class="todpick">${['am', 'pm', 'night'].map(k => `<button type="button" class="todopt tod-${k}${todPick.sel.has(k) ? ' on' : ''}" data-act="tod-toggle" data-tod-k="${k}" aria-pressed="${todPick.sel.has(k)}"><span class="todi">${TOD_ICON[k]}</span>${TOD[k]}</button>`).join('')}</div>
-<span class="hint">Pick one or more${(tc.perDay || 1) > 1 ? ` (you take it ${tc.perDay}× a day)` : ''}.</span>
+<span class="hint">${(tc.perDay || 1) > 1 ? `Pick up to ${tc.perDay} (you take it ${tc.perDay}× a day).` : 'Pick one (you take it once a day).'}</span>
 <div class="actions cfm-actions"><button class="btn ghost" data-act="tod-cancel">Cancel</button><button class="btn" data-act="tod-save" data-id="${tc.id}">Save</button></div>
 <span class="err" id="tod-err"></span></div></div></div>`); todPick.fresh = false; } }
 if (unpId){ const uc = cycles.find(x => x.id === unpId), us = uc && stats(uc);
@@ -1051,7 +1061,7 @@ clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep();
-selRoute = routeOf(c); selTod = new Set(todsOf(c)); syncTod();
+selRoute = routeOf(c); $('f-perday').value = String(c.perDay || 1); selTod = new Set(todsOf(c)); syncTod();
 if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; nasMode = c.nasMode === 'mcg' ? 'mcg' : 'sprays'; $('n-mcg').value = c.nasMcg > 0 ? c.nasMcg : ''; }
 else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; } syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
@@ -1480,7 +1490,11 @@ return;
 }
 if (b.dataset.act === 'tod-pick'){ todPick = {id: b.dataset.id, sel: new Set(), fresh: true}; renderList(); return; }
 if (b.dataset.act === 'tod-cancel'){ todPick = null; renderList(); return; }
-if (b.dataset.act === 'tod-toggle'){ const k = b.dataset.todK; todPick.sel.has(k) ? todPick.sel.delete(k) : todPick.sel.add(k); renderList(); return; }
+if (b.dataset.act === 'tod-toggle'){ const k = b.dataset.todK, tc = cycles.find(x => x.id === todPick.id), max = (tc && tc.perDay) || 1;
+if (todPick.sel.has(k)) todPick.sel.delete(k);
+else if (todPick.sel.size >= max){ if (max === 1){ todPick.sel = new Set([k]); } else { const e = $('tod-err'); if (e) e.textContent = `You take it ${max}× a day, so pick up to ${max}.`; return; } }
+else todPick.sel.add(k);
+renderList(); return; }
 if (b.dataset.act === 'tod-save'){ if (!todPick.sel.size){ $('tod-err').textContent = 'Pick at least one time.'; return; }
 const c = cycles.find(x => x.id === b.dataset.id), times = ['am', 'pm', 'night'].filter(t => todPick.sel.has(t)); todPick = null;
 await saveCycle({...c, times}, 'err'); return; }
