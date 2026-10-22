@@ -60,7 +60,7 @@ let dupAck = null;
 // delivery route: subcutaneous / intramuscular / nasal. Nasal doses are stored as mL (sprays x 2 nostrils x mL per spray).
 let selRoute = 'subq';
 // time of day: optional morning / afternoon / night tags; Today groups doses by them
-let selTod = new Set();
+let selTod = new Set(), todMode = 'weekday', todDaysSel = {};
 const TOD = {am: 'Morning', pm: 'Afternoon', night: 'Night', any: 'Anytime'};
 const TOD_ICON = {
 am: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 9V2"/><path d="m4.2 10.2 1.4 1.4"/><path d="M1 18h2"/><path d="M21 18h2"/><path d="m18.4 11.6 1.4-1.4"/><path d="M23 22H1"/><path d="m8 6 4-4 4 4"/></svg>',
@@ -69,9 +69,11 @@ night: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width=
 any: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'};
 const todsOf = c => (c.times || []).filter(t => TOD[t] && t !== 'any');
 // alternating times: one dose a day, rotating through the picked times in order (e.g. AM one dose day, PM the next)
-const isAlt = c => !!c.todAlt && todsOf(c).length > 1;
+const isAlt = c => !!c.todAlt && (c.todMode === 'weekday' ? !!c.todDays : todsOf(c).length > 1);
 function slotOn(c, d){
-const t = todsOf(c); if (!isAlt(c)) return null;
+if (!isAlt(c)) return null;
+if (c.todMode === 'weekday') return (c.todDays && c.todDays[d.getDay()]) || todsOf(c)[0] || 'am';
+const t = todsOf(c);
 const sc = schedule(c), i = sc.findIndex(x => +x === +d); if (i < 0) return null;
 let n = 0; for (let k = 0; k < i; k++) if (doseDay(c, k, sc[k]) && doseAtIndex(c, k)) n++;
 return t[n % t.length];
@@ -87,16 +89,29 @@ const per1 = (parseInt($('f-perday').value, 10) || 1) === 1;
 $('todAltWrap').hidden = !per1; if (!per1) $('f-todalt').checked = false;
 const altNote = $('todAltNote'), alt = todAltOn();
 altNote.hidden = !alt;
-if (alt){ const order = [...selTod];
-altNote.innerHTML = order.length < 2 ? 'Pick at least 2 times. They rotate in the order you tap them.' : `<b>Rotation:</b> ${order.map(t => `<span class="todtag tod-${t}">${TOD[t]}</span>`).join(' → ')} → repeat. Dose day 1 is ${TOD[order[0]].toLowerCase()}, day 2 is ${TOD[order[1]].toLowerCase()}${order[2] ? ', day 3 is ' + TOD[order[2]].toLowerCase() : ''}.`; }
+const wkOk = !selEvery; if (!wkOk && todMode === 'weekday') todMode = 'rotate';
+const byDay = alt && todMode === 'weekday';
+$('tod').hidden = byDay;
+if (byDay){
+const ds = [1,2,3,4,5,6,0].filter(i => selDays.has(i));
+let flip = 0; ds.forEach(i => { if (!todDaysSel[i]) todDaysSel[i] = flip++ % 2 ? 'pm' : 'am'; });
+altNote.innerHTML = `<div class="seg altmode" role="radiogroup"><button type="button" role="radio" data-altmode="weekday" aria-checked="true">By weekday</button><button type="button" role="radio" data-altmode="rotate" aria-checked="false">Rotate</button></div>
+${ds.length ? `<div class="wkrows">${ds.map(i => `<div class="wkrow"><b>${DAYNAME[i]}</b><div class="wkopts">${['am', 'pm', 'night'].map(k => `<button type="button" class="wkopt tod-${k}${todDaysSel[i] === k ? ' on' : ''}" data-wkday="${i}" data-wkt="${k}" aria-pressed="${todDaysSel[i] === k}">${TOD_SHORT[k]}</button>`).join('')}</div></div>`).join('')}</div>` : '<span class="hint">Pick the days you dose above first.</span>'}`;
+}
+else if (alt){ const order = [...selTod];
+altNote.innerHTML = `<div class="seg altmode" role="radiogroup"><button type="button" role="radio" data-altmode="weekday" aria-checked="false"${wkOk ? '' : ' disabled'}>By weekday</button><button type="button" role="radio" data-altmode="rotate" aria-checked="true">Rotate</button></div>` + (order.length < 2 ? 'Pick at least 2 times. They rotate in the order you tap them.' : `<b>Rotation:</b> ${order.map(t => `<span class="todtag tod-${t}">${TOD[t]}</span>`).join(' → ')} → repeat. Dose day 1 is ${TOD[order[0]].toLowerCase()}, day 2 is ${TOD[order[1]].toLowerCase()}${order[2] ? ', day 3 is ' + TOD[order[2]].toLowerCase() : ''}.${wkOk ? '' : ' (Every other day uses rotation, since the weekdays change.)'}`); }
 document.querySelectorAll('[data-tod]').forEach(b => b.setAttribute('aria-pressed', String(selTod.has(b.dataset.tod))));
-const h = $('todHint'); if (h){ h.textContent = msg || (alt ? 'Tap the times in the order you want them to rotate.' : `Optional. Pick up to ${max} (${max === 1 ? 'once a day' : max + '× a day'}). Today groups your doses by these.`); h.classList.toggle('warn', !!msg); }
+const h = $('todHint'); if (h){ h.textContent = msg || (byDay ? 'Choose the time for each dose day.' : alt ? 'Tap the times in the order you want them to rotate.' : `Optional. Pick up to ${max} (${max === 1 ? 'once a day' : max + '× a day'}). Today groups your doses by these.`); h.classList.toggle('warn', !!msg); }
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-tod]'); if (!b) return; const t = b.dataset.tod, max = todMax();
 if (selTod.has(t)) { selTod.delete(t); return syncTod(); }
 if (selTod.size >= max) return syncTod(`You take it ${max === 1 ? 'once a day' : max + '× a day'}, so you can pick ${max === 1 ? 'only one time' : 'up to ' + max + ' times'}. Unselect one first, or raise doses per day.`);
 selTod.add(t); syncTod(); });
 document.addEventListener('change', e => { if (e.target.id === 'f-perday' || e.target.id === 'f-todalt') syncTod(); });
+document.addEventListener('click', e => {
+const m = e.target.closest('[data-altmode]'); if (m){ todMode = m.dataset.altmode; return syncTod(); }
+const w = e.target.closest('[data-wkday]'); if (w){ todDaysSel[w.dataset.wkday] = w.dataset.wkt; return syncTod(); }
+});
 const ROUTES = {subq: ['SubQ', 'Subcutaneous'], im: ['IM', 'Intramuscular'], nasal: ['Nasal', 'Nasal spray']};
 const routeOf = c => ROUTES[c.route] ? c.route : 'subq';
 const isNasal = c => c.route === 'nasal';
@@ -623,6 +638,7 @@ $('days').appendChild(b);
 });
 document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset === 'eod' ? !!selEvery : !selEvery && b.dataset.preset === [...selDays].sort().join(',')));
 $('eodNote').hidden = !selEvery;
+if (typeof syncTod === 'function' && $('todAltNote')) syncTod();
 }
 const dayWord = d => { const dd = diff(today(), d); return dd === 0 ? 'today' : dd === 1 ? 'tomorrow' : `${DAYNAME[d.getDay()]} ${fmt(d)}`; };
 // dose for display, always mg first when it can be worked out (units / mL doses show mg, then the amount entered)
@@ -1051,7 +1067,7 @@ ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
 <div class="kv"><span class="label">Route</span><b>${ROUTES[routeOf(c)][1]}</b></div>
-${todsOf(c).length ? `<div class="kv"><span class="label">Time of day</span><b>${isAlt(c) ? 'Alternates ' + todsOf(c).map(t => TOD_SHORT[t]).join(' → ') : todsOf(c).map(t => TOD[t]).join(', ')}</b></div>` : ''}
+${todsOf(c).length ? `<div class="kv"><span class="label">Time of day</span><b>${isAlt(c) ? (c.todMode === 'weekday' ? [1,2,3,4,5,6,0].filter(i => c.todDays[i]).map(i => DAYNAME[i] + ' ' + TOD_SHORT[c.todDays[i]]).join(' · ') : 'Alternates ' + todsOf(c).map(t => TOD_SHORT[t]).join(' → ')) : todsOf(c).map(t => TOD[t]).join(', ')}</b></div>` : ''}
 ${isNasal(c) ? `<div class="kv"><span class="label">Spray</span><b>${num(c.spMl)} mL each · ${num(c.bacMl)} mL bottle</b></div>` : ''}
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
 ${c.noRepeat && !offDaysOf(c) ? '<div class="kv"><span class="label">Repeat</span><b>No plan to repeat</b></div>' : ''}${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'wk' : 'wks')}</b></div>` : ''}
@@ -1068,7 +1084,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; selTod = new Set(); $('f-todalt').checked = false; syncTod(); syncRoute();
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; selTod = new Set(); todMode = 'weekday'; todDaysSel = {}; $('f-todalt').checked = false; syncTod(); syncRoute();
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -1081,7 +1097,7 @@ clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep();
-selRoute = routeOf(c); $('f-perday').value = String(c.perDay || 1); $('f-todalt').checked = !!c.todAlt; selTod = new Set(todsOf(c)); syncTod();
+selRoute = routeOf(c); $('f-perday').value = String(c.perDay || 1); $('f-todalt').checked = !!c.todAlt; todMode = c.todAlt && c.todMode !== 'weekday' ? 'rotate' : 'weekday'; todDaysSel = {...(c.todDays || {})}; selTod = new Set(todsOf(c)); syncTod();
 if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; nasMode = c.nasMode === 'mcg' ? 'mcg' : 'sprays'; $('n-mcg').value = c.nasMcg > 0 ? c.nasMcg : ''; }
 else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; } syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
@@ -1120,7 +1136,7 @@ const openLen = $('f-lenunit').value === 'open';
 if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length must be at least 1.';
 if (!selEvery && !selDays.size) return $('err').textContent = 'Select at least one day of the week.';
 if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
-if (todAltOn() && selTod.size < 2) return $('err').textContent = 'To alternate times, pick at least 2 times of day.';
+if (todAltOn() && (todMode === 'rotate' || selEvery) && selTod.size < 2) return $('err').textContent = 'To alternate times, pick at least 2 times of day.';
 const noRepeat = $('f-norep').checked, offRaw = $('f-off').value.trim(), offValue = offRaw === '' || openLen || noRepeat ? null : parseInt(offRaw, 10);
 if (offValue != null && !(offValue >= 0)) return $('err').textContent = 'Off-cycle length must be a whole number, or leave it blank.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
@@ -1177,8 +1193,11 @@ titrate, plan,
 pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
 created: existing ? existing.created : Date.now() };
 if (nas) Object.assign(c, nas); else { c.route = selRoute; delete c.spMl; }
-c.todAlt = todAltOn() && selTod.size > 1;
-c.times = c.todAlt ? [...selTod] : ['am', 'pm', 'night'].filter(t => selTod.has(t));
+const byDayMode = todAltOn() && todMode === 'weekday' && !selEvery;
+c.todAlt = byDayMode || (todAltOn() && selTod.size > 1);
+c.todMode = byDayMode ? 'weekday' : 'rotate';
+if (byDayMode){ const m = {}; [...selDays].forEach(i => { m[i] = todDaysSel[i] || 'am'; }); c.todDays = m; c.times = ['am', 'pm', 'night'].filter(t => Object.values(m).includes(t)); }
+else { delete c.todDays; c.times = c.todAlt ? [...selTod] : ['am', 'pm', 'night'].filter(t => selTod.has(t)); }
 $('submitBtn').disabled = true;
 try {
 await store.save(c);
