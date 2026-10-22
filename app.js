@@ -1728,19 +1728,19 @@ const pend = (testers || []).filter(t => t.status === 'pending').length;
 renderList();
 }
 // one-time "What's new" pop-up per user (remembered on the account, so it shows once across devices)
-const WN_ID = 'v1.3', WN_SINCE = '2026-10-18';
-const WN_HTML = `<h2 class="wn-title">What’s new</h2>
-<p class="wn-ver">Update 1.3</p>
-<ul>
+// release notes by version; each user sees only the updates they haven't seen yet (newest first)
+const WN_ID = 'v1.3';
+const WN_RANK = {'2026-10-18': 1, '2026-10-18b': 1, 'v1.1': 1, 'v1.2': 2, 'v1.3': 3};
+const WN = [
+{rank: 3, ver: '1.3', date: '2026-10-22', html: `<ul>
 <li><b>Time of day</b> for each compound: Morning, Afternoon or Night (up to your doses per day)</li>
 <li><b>Today</b> is grouped into color-coded Morning, Afternoon and Night sections</li>
 <li><b>Pick time</b> button on Today to set times for compounds you already have</li>
 <li><b>Alternate times</b> for once-a-day compounds: choose AM, PM or Night for each weekday, or rotate through them</li>
 <li><b>Paused</b> box under Today lists paused compounds, with an <b>Unpause</b> button and resume date</li>
 <li>Paused compounds no longer show in Upcoming</li>
-</ul>
-<p class="wn-ver prev">Update 1.2</p>
-<ul>
+</ul>`},
+{rank: 2, ver: '1.2', date: '2026-10-18', html: `<ul>
 <li><b>Delivery route</b> on every compound: Subcutaneous, Intramuscular or Nasal, shown as a tag on Today</li>
 <li><b>Nasal spray</b> setup: bottle size, spray volume, and sprays per nostril or a desired mcg dose (rounded up to full sprays), with bottle tracking by sprays left</li>
 <li><b>Total per day</b> shown under the dose for compounds taken more than once a day</li>
@@ -1748,9 +1748,8 @@ const WN_HTML = `<h2 class="wn-title">What’s new</h2>
 <li><b>No plan to repeat</b> option when setting up a cycle</li>
 <li><b>Settings</b> (gear, top right) with your profile, light/dark mode and sign out</li>
 <li>Blue <b>+</b> at the top of Today to add a new cycle</li>
-</ul>
-<p class="wn-ver prev">Update 1.1</p>
-<ul>
+</ul>`},
+{rank: 1, ver: '1.1', date: '2026-10-18', html: `<ul>
 <li><b>Every other day</b> schedule option</li>
 <li><b>Off-cycle</b> length on each compound, with an <b>Off-Cycle</b> tab showing breaks and expected restart dates</li>
 <li>A <b>“Ready to start again?”</b> banner when a break ends. Nothing restarts without your OK, and you can start now and backdate the start date.</li>
@@ -1764,15 +1763,18 @@ const WN_HTML = `<h2 class="wn-title">What’s new</h2>
 <li><b>Share</b> a compound as a styled image with dose, frequency, dates and titration</li>
 <li><b>Share all</b> current compounds in one image from the Current tab</li>
 <li>Light/dark mode</li>
-</ul>`;
+</ul>`}];
 let wnShown = false;
 function maybeWhatsNew(){
 if (wnShown || !sessionUser || !profile) return;
 const key = 'pcl-wn-' + sessionUser.id;
 let local = null; try { local = localStorage.getItem(key); } catch {}
 const meta = (sessionUser.user_metadata || {}).whatsNew;
-if (local === WN_ID || meta === WN_ID) return;
-if (profile.created && profile.created >= Date.parse(WN_SINCE + 'T07:00:00Z')) { try { localStorage.setItem(key, WN_ID); } catch {} return; } // brand-new accounts skip it
+const seen = Math.max(WN_RANK[local] || 0, WN_RANK[meta] || 0);
+// unseen updates, skipping ones released before the account existed (new users already have those features)
+const todo = WN.filter(u => u.rank > seen && !(profile.created && profile.created >= Date.parse(u.date + 'T23:59:59-07:00')));
+if (!todo.length){ if (seen < WN_RANK[WN_ID]) { try { localStorage.setItem(key, WN_ID); } catch {} } return; }
+const WN_HTML = `<h2 class="wn-title">What’s new</h2>` + todo.map((u, i) => `<p class="wn-ver${i ? ' prev' : ''}">Update ${u.ver}</p>${u.html}`).join('');
 wnShown = true;
 const el = document.createElement('div');
 el.className = 'sheet-wrap anim wn';
