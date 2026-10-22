@@ -68,18 +68,35 @@ pm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 night: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
 any: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'};
 const todsOf = c => (c.times || []).filter(t => TOD[t] && t !== 'any');
-const todMax = () => parseInt($('f-perday').value, 10) || 1;
+// alternating times: one dose a day, rotating through the picked times in order (e.g. AM one dose day, PM the next)
+const isAlt = c => !!c.todAlt && todsOf(c).length > 1;
+function slotOn(c, d){
+const t = todsOf(c); if (!isAlt(c)) return null;
+const sc = schedule(c), i = sc.findIndex(x => +x === +d); if (i < 0) return null;
+let n = 0; for (let k = 0; k < i; k++) if (doseDay(c, k, sc[k]) && doseAtIndex(c, k)) n++;
+return t[n % t.length];
+}
+const todsFor = (c, d) => isAlt(c) ? [slotOn(c, d)].filter(Boolean) : todsOf(c);
+const TOD_SHORT = {am: 'AM', pm: 'PM', night: 'Night'};
+const todAltOn = () => $('f-todalt') && $('f-todalt').checked && (parseInt($('f-perday').value, 10) || 1) === 1;
+const todMax = () => todAltOn() ? 3 : (parseInt($('f-perday').value, 10) || 1);
 function syncTod(msg){
 const max = todMax();
-if (selTod.size > max) selTod = new Set(['am', 'pm', 'night'].filter(t => selTod.has(t)).slice(0, max));
+if (selTod.size > max) selTod = new Set([...selTod].slice(0, max));
+const per1 = (parseInt($('f-perday').value, 10) || 1) === 1;
+$('todAltWrap').hidden = !per1; if (!per1) $('f-todalt').checked = false;
+const altNote = $('todAltNote'), alt = todAltOn();
+altNote.hidden = !alt;
+if (alt){ const order = [...selTod];
+altNote.innerHTML = order.length < 2 ? 'Pick at least 2 times. They rotate in the order you tap them.' : `<b>Rotation:</b> ${order.map(t => `<span class="todtag tod-${t}">${TOD[t]}</span>`).join(' → ')} → repeat. Dose day 1 is ${TOD[order[0]].toLowerCase()}, day 2 is ${TOD[order[1]].toLowerCase()}${order[2] ? ', day 3 is ' + TOD[order[2]].toLowerCase() : ''}.`; }
 document.querySelectorAll('[data-tod]').forEach(b => b.setAttribute('aria-pressed', String(selTod.has(b.dataset.tod))));
-const h = $('todHint'); if (h){ h.textContent = msg || `Optional. Pick up to ${max} (${max === 1 ? 'once a day' : max + '× a day'}). Today groups your doses by these.`; h.classList.toggle('warn', !!msg); }
+const h = $('todHint'); if (h){ h.textContent = msg || (alt ? 'Tap the times in the order you want them to rotate.' : `Optional. Pick up to ${max} (${max === 1 ? 'once a day' : max + '× a day'}). Today groups your doses by these.`); h.classList.toggle('warn', !!msg); }
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-tod]'); if (!b) return; const t = b.dataset.tod, max = todMax();
 if (selTod.has(t)) { selTod.delete(t); return syncTod(); }
 if (selTod.size >= max) return syncTod(`You take it ${max === 1 ? 'once a day' : max + '× a day'}, so you can pick ${max === 1 ? 'only one time' : 'up to ' + max + ' times'}. Unselect one first, or raise doses per day.`);
 selTod.add(t); syncTod(); });
-document.addEventListener('change', e => { if (e.target.id === 'f-perday') syncTod(); });
+document.addEventListener('change', e => { if (e.target.id === 'f-perday' || e.target.id === 'f-todalt') syncTod(); });
 const ROUTES = {subq: ['SubQ', 'Subcutaneous'], im: ['IM', 'Intramuscular'], nasal: ['Nasal', 'Nasal spray']};
 const routeOf = c => ROUTES[c.route] ? c.route : 'subq';
 const isNasal = c => c.route === 'nasal';
@@ -781,9 +798,10 @@ const todaySub = !cycles.length ? 'Your daily doses appear here.'
 const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
 ? startCta('Set up your protocol', 'Add the peptides you take to build your schedule. Today’s doses, progress, and vial counts will show up here.')
+
 : due.length ? (() => {
-const groups = {am: [], pm: [], night: [], any: []};
-due.forEach(x => { const t = todsOf(x.c); (t.length ? t : ['any']).forEach(k => groups[k].push({x, split: t.length > 1})); });
+const t0 = today(), groups = {am: [], pm: [], night: [], any: []};
+due.forEach(x => { const t = todsFor(x.c, t0); (t.length ? t : ['any']).forEach(k => groups[k].push({x, split: t.length > 1})); });
 const used = Object.keys(groups).filter(k => groups[k].length);
 if (used.length === 1 && used[0] === 'any') return `<div class="rows">${due.map(x => trow(x, 'home|' + x.c.id)).join('')}</div>`;
 return `<div class="todgroups">${used.map(k => `<section class="todg tod-${k}"><div class="todh"><span class="todi" aria-hidden="true">${TOD_ICON[k]}</span><span>${TOD[k]}</span><span class="todn">${groups[k].length}</span></div><div class="rows">${groups[k].map(({x, split}) => trow(x, 'home|' + k + '|' + x.c.id, split)).join('')}</div></section>`).join('')}</div>`;
@@ -806,7 +824,7 @@ const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 
 const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show next 3 days' : `Show next 7 days${hidden ? ` (${hidden} more day${hidden === 1 ? '' : 's'})` : ''}`}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
+<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}${isAlt(c) && slotOn(c, d) ? `<span class="todtag tod-${slotOn(c, d)}">${TOD_SHORT[slotOn(c, d)]}</span>` : ''}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 ;
@@ -1033,12 +1051,14 @@ ${open ? `<div class="details"><div class="grid">
 <div class="kv"><span class="label">Start</span><b>${fmt(s.start)}</b></div>
 <div class="kv"><span class="label">End${s.pausedDays && !s.endedEarly ? ' · moved' : ''}</span><b>${s.endedEarly ? fmt(parse(c.endedOn)) : open_ ? 'No end date' : fmt(s.end)}</b></div>
 <div class="kv"><span class="label">Route</span><b>${ROUTES[routeOf(c)][1]}</b></div>
+${todsOf(c).length ? `<div class="kv"><span class="label">Time of day</span><b>${isAlt(c) ? 'Alternates ' + todsOf(c).map(t => TOD_SHORT[t]).join(' → ') : todsOf(c).map(t => TOD[t]).join(', ')}</b></div>` : ''}
 ${isNasal(c) ? `<div class="kv"><span class="label">Spray</span><b>${num(c.spMl)} mL each · ${num(c.bacMl)} mL bottle</b></div>` : ''}
 <div class="kv"><span class="label">Length</span><b>${open_ ? 'Open-ended' : `${c.lenValue} ${c.lenUnit === 'weeks' ? (c.lenValue==1?'wk':'wks') : (c.lenValue==1?'day':'days')}`}</b></div>
 ${c.noRepeat && !offDaysOf(c) ? '<div class="kv"><span class="label">Repeat</span><b>No plan to repeat</b></div>' : ''}${offDaysOf(c) ? `<div class="kv"><span class="label">Off-cycle after</span><b>${c.offValue} ${c.offUnit === 'days' ? (c.offValue == 1 ? 'day' : 'days') : (c.offValue == 1 ? 'wk' : 'wks')}</b></div>` : ''}
 <div class="kv"><span class="label">Schedule${(c.perDay||1)>1 ? ' · '+c.perDay+'×/day' : ''}</span>${c.interval > 1 ? '<b>Every other day</b>' : `<div class="wk">${wk}</div>`}</div>
 </div>
-${lifeLine}</div>` + detailsBlock(c, s) : ''}
+${lifeLine}${isAlt(c) && s.status !== 'complete' ? (() => { const out = []; for (let i = Math.max(s.curIdx || 0, 0); i < s.sched.length && out.length < 8; i++){ const d = s.sched[i]; if (d < today() || !doseDay(c, i, d) || !doseAtIndex(c, i)) continue; out.push({d, t: slotOn(c, d)}); }
+return out.length ? `<div class="altplan"><span class="label">Next doses</span><div>${out.map(o => `<span class="altday tod-${o.t}"><b>${DAYNAME[o.d.getDay()]} ${o.d.getDate()}</b>${TOD_SHORT[o.t]}</span>`).join('')}</div></div>` : ''; })() : ''}</div>` + detailsBlock(c, s) : ''}
 ${notesOpen.has(c.id) ? notesBlock(c) : ''}
 </div>
 </article>`;
@@ -1048,7 +1068,7 @@ function resetForm(){
 editingId = null; doseSource = 'mg';
 $('form').reset();
 $('f-start').value = iso(today());
-$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; selTod = new Set(); syncTod(); syncRoute();
+$('f-len').value = 8; $('f-lenunit').value = 'weeks'; $('f-unit').value = 'mg'; $('f-off').value = ''; $('f-offunit').value = 'weeks'; $('f-norep').checked = false; syncNoRep(); selRoute = 'subq'; $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; selTod = new Set(); $('f-todalt').checked = false; syncTod(); syncRoute();
 selDays = new Set([1,2,3,4,5]); selEvery = 0; renderDays();
 $('f-perday').value = '1'; syncLen(); syncPremix();
 titSteps = []; renderSteps();
@@ -1061,7 +1081,7 @@ clearDup();
 $('f-name').value = c.name;
 $('f-start').value = asNew ? (isOpen(c) && !c.endedOn ? iso(today()) : iso(addDays(stats(c).end, 1) > today() ? addDays(stats(c).end,1) : today())) : c.start;
 $('f-len').value = c.lenValue ?? 8; $('f-lenunit').value = c.lenUnit; $('f-off').value = c.offValue > 0 ? c.offValue : ''; $('f-offunit').value = c.offUnit || 'weeks'; $('f-norep').checked = !!c.noRepeat; syncNoRep();
-selRoute = routeOf(c); $('f-perday').value = String(c.perDay || 1); selTod = new Set(todsOf(c)); syncTod();
+selRoute = routeOf(c); $('f-perday').value = String(c.perDay || 1); $('f-todalt').checked = !!c.todAlt; selTod = new Set(todsOf(c)); syncTod();
 if (isNasal(c)){ $('n-bottle').value = c.bacMl ?? 10; $('n-spray').value = c.spMl ?? 0.1; $('n-sprays').value = c.dose != null && c.spMl > 0 ? Math.max(1, Math.round(c.dose / (2 * c.spMl))) : 1; $('n-mg').value = c.vialMg > 0 ? c.vialMg : ''; nasMode = c.nasMode === 'mcg' ? 'mcg' : 'sprays'; $('n-mcg').value = c.nasMcg > 0 ? c.nasMcg : ''; }
 else { $('n-bottle').value = 10; $('n-spray').value = 0.1; $('n-sprays').value = 1; $('n-mg').value = ''; nasMode = 'sprays'; $('n-mcg').value = ''; } syncLen();
 $('f-dose').value = c.dose ?? ''; $('f-unit').value = c.unit;
@@ -1100,6 +1120,7 @@ const openLen = $('f-lenunit').value === 'open';
 if (!openLen && !(lenValue > 0)) return $('err').textContent = 'Cycle length must be at least 1.';
 if (!selEvery && !selDays.size) return $('err').textContent = 'Select at least one day of the week.';
 if (dose != null && !(dose >= 0)) return $('err').textContent = 'Dose must be a number.';
+if (todAltOn() && selTod.size < 2) return $('err').textContent = 'To alternate times, pick at least 2 times of day.';
 const noRepeat = $('f-norep').checked, offRaw = $('f-off').value.trim(), offValue = offRaw === '' || openLen || noRepeat ? null : parseInt(offRaw, 10);
 if (offValue != null && !(offValue >= 0)) return $('err').textContent = 'Off-cycle length must be a whole number, or leave it blank.';
 const optNum = id => { const v = $(id).value.trim(); return v === '' ? null : parseFloat(v); };
@@ -1156,7 +1177,8 @@ titrate, plan,
 pauses: existing ? (existing.pauses||[]) : [], endedOn: existing ? (existing.endedOn ?? null) : null,
 created: existing ? existing.created : Date.now() };
 if (nas) Object.assign(c, nas); else { c.route = selRoute; delete c.spMl; }
-c.times = ['am', 'pm', 'night'].filter(t => selTod.has(t));
+c.todAlt = todAltOn() && selTod.size > 1;
+c.times = c.todAlt ? [...selTod] : ['am', 'pm', 'night'].filter(t => selTod.has(t));
 $('submitBtn').disabled = true;
 try {
 await store.save(c);

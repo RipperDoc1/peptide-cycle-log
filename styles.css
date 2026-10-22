@@ -707,3 +707,13 @@ header .syncrow .sync{margin-top:0}
 .todopt.tod-am .todi{background:var(--am)}.todopt.tod-pm .todi{background:var(--pm)}.todopt.tod-night .todi{background:var(--night)}
 .todopt.on::after{content:"\2713";margin-left:auto;font-weight:800}
 #todHint.warn{color:var(--danger)}
+
+.todalt{background:var(--sunken);border-radius:var(--r-sm);padding:10px 12px;font-size:.9rem;line-height:1.6}
+.todtag{display:inline-block;font-size:.72rem;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+.todtag.tod-am{background:var(--am-soft);color:var(--am)}.todtag.tod-pm{background:var(--pm-soft);color:var(--pm)}.todtag.tod-night{background:var(--night-soft);color:var(--night)}
+.todalt .todtag{margin-left:0}
+.altplan{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.altplan > div{display:flex;flex-wrap:wrap;gap:6px}
+.altday{display:flex;flex-direction:column;align-items:center;min-width:54px;padding:6px 8px;border-radius:12px;font-size:.78rem;font-weight:700}
+.altday b{font-size:.8rem;color:var(--ink)}
+.altday.tod-am{background:var(--am-soft);color:var(--am)}.altday.tod-pm{background:var(--pm-soft);color:var(--pm)}.altday.tod-night{background:var(--night-soft);color:var(--night)}
