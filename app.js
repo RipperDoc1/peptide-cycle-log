@@ -1946,6 +1946,162 @@ sync(); });
 if (mq && mq.addEventListener) mq.addEventListener('change', sync);
 sync();
 })();
+// ---- Tools: cost & vial planner (a what-if calculator; nothing here changes your cycles) ----
+(function planner(){
+const PKEY = 'pcl-planner-v1';
+const blank = () => ({cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, dpw: 7, weeks: 8, indefinite: false, titrate: false, steps: []});
+let P = (() => { try { return {...blank(), ...JSON.parse(localStorage.getItem(PKEY) || '{}')}; } catch { return blank(); } })();
+const save = () => { try { localStorage.setItem(PKEY, JSON.stringify(P)); } catch {} };
+const fam = u => u === 'IU' ? 'IU' : 'mg';
+const toVial = (amt, unit) => unit === 'mcg' ? amt / 1000 : amt; // dose -> vial unit (mg or IU)
+const money = n => '$' + (Math.round(n * 100) / 100).toLocaleString(undefined, {minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2});
+const n2 = v => { const x = parseFloat(v); return isFinite(x) ? x : null; };
+const fmtAmt = (v, unit) => unit === 'IU' ? `${num(+v.toFixed(2))} IU` : v < 1 ? `${num(+(v * 1000).toFixed(1))} mcg` : `${num(+v.toFixed(3))} mg`;
+const open = on => { $('plannerPop').hidden = !on; $('plannerPop').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); if (on) render(); };
+document.addEventListener('click', e => {
+if (e.target.closest('[data-open-planner]')){ $('toolsPop').hidden = true; return open(true); }
+if (e.target.closest('[data-planner-close]')) return open(false);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('plannerPop').hidden) open(false); });
+
+// fill from one of your compounds
+function fromCycle(c){
+const q = blank(); q.cid = c.id; q.name = c.name;
+if (c.vialMg > 0){ q.vialAmt = +(+c.vialMg).toFixed(4); q.ml = c.bacMl > 0 ? +(+c.bacMl).toFixed(4) : ''; q.liquid = !!c.premixed; }
+q.vialUnit = c.unit === 'IU' ? 'IU' : 'mg';
+const base = c.dose;
+if (base != null){ if (c.unit === 'units' || c.unit === 'mL'){ const mg = mgOf(c, base); if (mg != null){ q.doseAmt = +mg.toFixed(4); q.doseUnit = 'mg'; } } else { q.doseAmt = base; q.doseUnit = c.unit === 'IU' ? 'IU' : c.unit === 'mcg' ? 'mcg' : 'mg'; } }
+q.perDay = c.perDay || 1;
+q.dpw = c.interval > 1 ? 3.5 : (c.days || []).length || 7;
+if (isOpen(c)) q.indefinite = true; else q.weeks = c.lenUnit === 'days' ? Math.max(1, Math.round(c.lenValue / 7)) : c.lenValue || 8;
+const pl = (c.plan || []).map(p => ({week: p.week != null ? p.week : Math.floor(idxOfDate(c, parse(p.date)) / 7) + 1, dose: p.dose})).filter(p => p.week >= 2);
+if (c.titrate && pl.length){ q.titrate = true; q.steps = pl.map(p => ({week: p.week, dose: (c.unit === 'units' || c.unit === 'mL') && mgOf(c, p.dose) != null ? +mgOf(c, p.dose).toFixed(4) : p.dose})); }
+return q;
+}
+
+function render(){
+const opts = cycles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(c => `<option value="${c.id}"${P.cid === c.id ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+$('plannerBody').innerHTML = `
+<h2 id="planTitle">Cost &amp; vial planner</h2>
+<p class="hint" style="margin:-6px 0 4px">A test run. Nothing here changes your cycles.</p>
+<div class="pgroup"><span class="label">Compound</span>
+<select id="pl-cycle"><option value="">Start fresh…</option>${opts}</select>
+<input id="pl-name" placeholder="Compound name" value="${esc(P.name)}" autocomplete="off"></div>
+
+<div class="pgroup"><span class="label">Price</span>
+<div class="seg pseg" data-pk="priceMode">${[['vial', 'Per vial'], ['kit', 'Kit (10)'], ['half', '½ kit (5)']].map(([v, l]) => `<button type="button" data-pv="${v}" aria-checked="${P.priceMode === v}">${l}</button>`).join('')}</div>
+<div class="inline"><span class="pre">$</span><input id="pl-price" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00" value="${P.price}"></div>
+<span class="hint" id="pl-vialcost"></span></div>
+
+<div class="pgroup"><span class="label">Vial</span>
+<div class="inline"><input id="pl-vamt" type="number" min="0" step="any" inputmode="decimal" placeholder="Size" value="${P.vialAmt}"><select id="pl-vunit"><option${P.vialUnit === 'mg' ? ' selected' : ''}>mg</option><option${P.vialUnit === 'IU' ? ' selected' : ''}>IU</option></select></div>
+<label class="chk"><input type="checkbox" id="pl-liquid"${P.liquid ? ' checked' : ''}> Already reconstituted / premixed</label>
+<div class="field"><label class="label" for="pl-ml" id="pl-mllabel">${P.liquid ? 'Vial size (mL)' : 'BAC water (mL)'}</label><input id="pl-ml" type="number" min="0" step="any" inputmode="decimal" placeholder="${P.liquid ? 'e.g. 10' : 'e.g. 2'}" value="${P.ml}"></div></div>
+
+<div class="pgroup"><span class="label">Dosing</span>
+<div class="seg pseg" data-pk="titrate"><button type="button" data-pv="0" aria-checked="${!P.titrate}">Static dose</button><button type="button" data-pv="1" aria-checked="${P.titrate}">Titration</button></div>
+<div class="field"><label class="label" for="pl-dose">${P.titrate ? 'Starting dose' : 'Dose'} (per injection)</label>
+<div class="inline"><input id="pl-dose" type="number" min="0" step="any" inputmode="decimal" placeholder="0.25" value="${P.doseAmt}"><select id="pl-dunit">${['mg', 'mcg', 'IU'].map(u => `<option${P.doseUnit === u ? ' selected' : ''}>${u}</option>`).join('')}</select></div></div>
+<div class="prow2"><div class="field"><label class="label" for="pl-perday">Doses per day</label><select id="pl-perday">${[1, 2, 3, 4].map(k => `<option value="${k}"${+P.perDay === k ? ' selected' : ''}>${k}× a day</option>`).join('')}</select></div>
+<div class="field"><label class="label" for="pl-dpw">Days per week</label><select id="pl-dpw">${[[7, 'Daily'], [6, '6 days'], [5, '5 days'], [4, '4 days'], [3.5, 'Every other day'], [3, '3 days'], [2, '2 days'], [1, '1 day']].map(([v, l]) => `<option value="${v}"${+P.dpw === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
+<div id="pl-steps"></div></div>
+
+<div class="pgroup"><span class="label">Length</span>
+<div class="inline"><input id="pl-weeks" type="number" min="1" step="1" inputmode="numeric" value="${P.weeks}"${P.indefinite ? ' disabled' : ''}><span class="suffix">weeks</span></div>
+<label class="chk"><input type="checkbox" id="pl-indef"${P.indefinite ? ' checked' : ''}> Indefinite (show 3 months, 6 months and 1 year)</label></div>
+
+<div id="pl-results" aria-live="polite"></div>
+<div class="actions" style="justify-content:space-between"><button type="button" class="link" data-plan-reset>Clear</button><button type="button" class="btn" data-planner-close>Done</button></div>`;
+renderSteps(); calc();
+}
+
+function renderSteps(){
+const el = $('pl-steps'); if (!el) return;
+if (!P.titrate){ el.innerHTML = ''; return; }
+const u = P.doseUnit;
+el.innerHTML = `<div class="plsteps"><span class="label">Increase the dose at</span>
+${P.steps.map((st, i) => `<div class="plstep"><span>Week</span><input type="number" min="2" step="1" inputmode="numeric" data-sw="${i}" value="${st.week ?? ''}"><span>→</span><input type="number" min="0" step="any" inputmode="decimal" data-sd="${i}" value="${st.dose ?? ''}" placeholder="dose"><span class="u">${u}</span><button type="button" class="link del" data-srm="${i}" aria-label="Remove">✕</button></div>`).join('') || '<span class="hint">No increases yet.</span>'}
+<button type="button" class="link" data-sadd>+ Add a step</button>
+<span class="err" id="pl-steperr"></span></div>`;
+}
+
+const doseAt = (w, start, steps) => { let d = start; steps.forEach(s => { if (s.week <= w) d = s.dose; }); return d; };
+function calc(){
+const out = $('pl-results'); if (!out) return;
+const price = n2(P.price), vamt = n2(P.vialAmt), ml = n2(P.ml), dose = n2(P.doseAmt), perDay = +P.perDay || 1, dpw = +P.dpw || 7;
+const vialCost = price == null ? null : P.priceMode === 'kit' ? price / 10 : P.priceMode === 'half' ? price / 5 : price;
+$('pl-vialcost').textContent = vialCost != null && P.priceMode !== 'vial' ? `= ${money(vialCost)} per vial` : '';
+const err = m => { out.innerHTML = `<div class="plres empty">${m}</div>`; };
+if (!(vamt > 0)) return err('Enter the vial size to see vials and cost.');
+if (!(dose > 0)) return err('Enter a dose.');
+if (fam(P.doseUnit) !== fam(P.vialUnit)) return err(`The dose is in ${P.doseUnit} but the vial is in ${P.vialUnit}. Use the same kind of unit (mg/mcg or IU).`);
+const unit = P.vialUnit;
+let steps = [];
+if (P.titrate){
+const raw = P.steps.map(s => ({week: parseInt(s.week, 10), dose: n2(s.dose)}));
+const se = $('pl-steperr'); if (se) se.textContent = '';
+for (let i = 0; i < raw.length; i++){
+const s = raw[i];
+if (!(s.week >= 2) || !(s.dose > 0)) { if (se) se.textContent = `Step ${i + 1} needs a week (2 or later) and a dose.`; continue; }
+if (i && raw[i - 1].week >= s.week){ if (se) se.textContent = `Step ${i + 1} must come after week ${raw[i - 1].week}.`; continue; }
+if (!P.indefinite && s.week > (+P.weeks || 0)){ if (se) se.textContent = `Step ${i + 1} starts after the cycle ends (week ${P.weeks}).`; continue; }
+steps.push({week: s.week, dose: toVial(s.dose, P.doseUnit)});
+}
+}
+const d0 = toVial(dose, P.doseUnit), perWeek = dpw * perDay;
+const conc = ml > 0 ? vamt / ml : null;
+const unitsFor = d => conc ? d / conc * 100 : null;
+const periods = P.indefinite ? [[13, '3 months'], [26, '6 months'], [52, '1 year']] : [[Math.max(1, parseInt(P.weeks, 10) || 0), `${parseInt(P.weeks, 10) || 0} week${(parseInt(P.weeks, 10) || 0) === 1 ? '' : 's'}`]];
+const cards = periods.map(([W, label]) => {
+let total = 0; for (let w = 1; w <= W; w++) total += doseAt(w, d0, steps) * perWeek;
+const vials = Math.ceil(total / vamt - 1e-9), cost = vialCost != null ? vials * vialCost : null, left = vials * vamt - total;
+const kits = P.priceMode === 'kit' ? Math.ceil(vials / 10) : P.priceMode === 'half' ? Math.ceil(vials / 5) : null;
+return `<div class="plres"><div class="plres-h">${label}</div>
+<div class="plnums"><div><b>${vials}</b><span>vial${vials === 1 ? '' : 's'}</span></div><div><b>${cost != null ? money(cost) : '—'}</b><span>total cost</span></div></div>
+<div class="plsub">${fmtAmt(total, unit)} total · ${fmtAmt(left, unit)} left over${cost != null ? ` · ${money(cost / W)}/week · ${money(cost / W * 52 / 12)}/month` : ''}${kits != null ? ` · ${kits} ${P.priceMode === 'kit' ? 'kit' : 'half kit'}${kits === 1 ? '' : 's'} (${money(kits * price)})` : ''}</div></div>`;
+}).join('');
+// dose breakdown (static or by titration phase)
+const lastW = periods[periods.length - 1][0];
+const phases = [{from: 1, dose: d0}, ...steps.map(s => ({from: s.week, dose: s.dose}))].map((p, i, a) => ({...p, to: i < a.length - 1 ? a[i + 1].from - 1 : lastW}));
+const rows = phases.filter(p => p.from <= lastW).map(p => { const u = unitsFor(p.dose); const wks = p.to - p.from + 1;
+return `<div class="plph"><span>${P.indefinite && p.to === lastW && phases.length > 1 ? `Wk ${p.from}+` : p.from === p.to ? `Wk ${p.from}` : `Wk ${p.from}–${p.to}`}</span><b>${fmtAmt(p.dose, unit)}${perDay > 1 ? ' × ' + perDay : ''}</b><span${u > 100 ? ' class="over" title="More than one full U-100 syringe"' : ''}>${u != null ? `${+u.toFixed(1)} units${u > 100 ? ' ⚠' : ''}` : ''}</span><span class="muted">${fmtAmt(p.dose * perWeek * wks, unit)}</span></div>`; }).join('');
+out.innerHTML = `${cards}
+<div class="plbreak"><span class="label">${steps.length ? 'Titration breakdown' : 'Dose breakdown'}</span>${rows}
+<span class="hint">${conc ? `Concentration ${num(+conc.toFixed(3))} ${unit}/mL on a U-100 syringe.` : 'Add the BAC water (or vial mL) to see syringe units.'}${phases.some(p => (unitsFor(p.dose) || 0) > 100) ? ' ⚠ Doses over 100 units need more than one full syringe; more BAC water lowers the units.' : ''} ${num(+perWeek.toFixed(1))} injection${perWeek === 1 ? '' : 's'} a week.</span></div>`;
+}
+
+// inputs
+const map = {'pl-name': 'name', 'pl-price': 'price', 'pl-vamt': 'vialAmt', 'pl-vunit': 'vialUnit', 'pl-ml': 'ml', 'pl-dose': 'doseAmt', 'pl-dunit': 'doseUnit', 'pl-perday': 'perDay', 'pl-dpw': 'dpw', 'pl-weeks': 'weeks'};
+document.addEventListener('input', e => {
+if ($('plannerPop').hidden) return;
+const t = e.target;
+if (map[t.id]){ P[map[t.id]] = t.value; if (t.id === 'pl-dunit') renderSteps(); }
+else if (t.dataset.sw != null) P.steps[+t.dataset.sw].week = t.value;
+else if (t.dataset.sd != null) P.steps[+t.dataset.sd].dose = t.value;
+else return;
+save(); calc();
+});
+document.addEventListener('change', e => {
+if ($('plannerPop').hidden) return;
+const t = e.target;
+if (t.id === 'pl-cycle'){ const c = cycles.find(x => x.id === t.value); P = c ? fromCycle(c) : {...blank(), price: P.price, priceMode: P.priceMode}; if (c) { P.price = P.price || ''; } save(); return render(); }
+if (t.id === 'pl-liquid'){ P.liquid = t.checked; save(); $('pl-mllabel').textContent = P.liquid ? 'Vial size (mL)' : 'BAC water (mL)'; return calc(); }
+if (t.id === 'pl-indef'){ P.indefinite = t.checked; save(); $('pl-weeks').disabled = P.indefinite; return calc(); }
+if (map[t.id]){ P[map[t.id]] = t.value; save(); if (t.id === 'pl-dunit') renderSteps(); calc(); }
+});
+document.addEventListener('click', e => {
+if ($('plannerPop').hidden) return;
+const seg = e.target.closest('.pseg [data-pv]');
+if (seg){ const k = seg.parentElement.dataset.pk, v = seg.dataset.pv; P[k] = k === 'titrate' ? v === '1' : v;
+if (k === 'titrate' && P.titrate && !P.steps.length) P.steps = [{week: 3, dose: ''}];
+seg.parentElement.querySelectorAll('[data-pv]').forEach(b => b.setAttribute('aria-checked', String(b === seg)));
+if (k === 'titrate'){ const l = document.querySelector('label[for="pl-dose"]'); if (l) l.textContent = (P.titrate ? 'Starting dose' : 'Dose') + ' (per injection)'; renderSteps(); }
+save(); return calc(); }
+if (e.target.closest('[data-sadd]')){ const last = P.steps[P.steps.length - 1]; P.steps.push({week: last && parseInt(last.week, 10) ? parseInt(last.week, 10) + 2 : 3, dose: ''}); save(); renderSteps(); return calc(); }
+const rm = e.target.closest('[data-srm]'); if (rm){ P.steps.splice(+rm.dataset.srm, 1); save(); renderSteps(); return calc(); }
+if (e.target.closest('[data-plan-reset]')){ P = blank(); save(); return render(); }
+});
+})();
 window.addEventListener('online', () => { if (phase === 'app') loadAll(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
