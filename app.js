@@ -1701,7 +1701,7 @@ $('listSec').hidden = !app || view === 'add';
 $('form').hidden = !app || view !== 'add';
 const out = sessionUser ? `<button type="button" class="link" id="signOut">Sign out</button>` : '';
 $('whoami').hidden = true; void out;
-$('settingsBtn').hidden = !sessionUser;
+$('settingsBtn').hidden = !sessionUser; $('toolsBtn').hidden = !sessionUser;
 if (!sessionUser) $('settings').hidden = true;
 $('setName').textContent = profile ? profile.name : (sessionUser ? 'Signed in' : '');
 $('setTg').textContent = profile && profile.telegram ? '@' + profile.telegram : '';
@@ -1900,6 +1900,10 @@ $('ob-tg').addEventListener('input', e => { if (e.target.value.startsWith('@')) 
 $('obCancel').onclick = () => { editingProfile = false; gate(); };
 const openSettings = on => { $('settings').hidden = !on; $('settings').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); };
 $('settingsBtn').addEventListener('click', () => openSettings(true));
+const openTools = on => { $('toolsPop').hidden = !on; $('toolsPop').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); };
+$('toolsBtn').addEventListener('click', () => openTools(true));
+document.addEventListener('click', e => { if (e.target.closest('[data-tools-close]')) openTools(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('toolsPop').hidden) openTools(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('settings').hidden) openSettings(false); });
 document.addEventListener('click', async e => {
 if (e.target.closest('[data-set-close]')) return openSettings(false);

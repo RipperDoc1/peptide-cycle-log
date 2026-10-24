@@ -728,3 +728,13 @@ header .syncrow .sync{margin-top:0}
 .wkopts{display:flex;gap:6px}
 .wkopt{border:1.5px solid transparent;border-radius:999px;padding:5px 12px;font-weight:700;font-size:.82rem;color:var(--ink);background:var(--surface)}
 .wkopt.on.tod-am{background:var(--am);color:#fff}.wkopt.on.tod-pm{background:var(--pm);color:#fff}.wkopt.on.tod-night{background:var(--night);color:#fff}
+
+.hright{align-items:flex-start}
+.hcol{display:flex;flex-direction:column;gap:8px}
+.tools-body{align-items:center;text-align:center;padding-top:8px}
+.uc-badge{width:72px;height:72px;border-radius:50%;background:var(--pm-soft);color:var(--pm);display:grid;place-items:center}
+.uc-badge svg{width:34px;height:34px}
+.uc-sub{margin:-8px 0 0;color:var(--muted);font-size:1.05rem}
+.tools-body .actions{justify-content:center;width:100%}
+.tools-body .btn{min-width:140px}
+header h1{padding-right:54px}
