@@ -778,3 +778,4 @@ header h1{padding-right:54px}
 .plph .muted{color:var(--muted);font-size:.82rem}
 #pl-results{display:flex;flex-direction:column;gap:12px}
 .plph .over{color:var(--danger);font-weight:700}
+.pldays{grid-template-columns:repeat(7,1fr)}.pldays .day{background:var(--surface)}.pldays .day[aria-pressed="true"]{background:var(--sel);color:var(--sel-ink)}.pgroup .quick .link{background:var(--surface)}.pgroup .quick .link.on{background:var(--sel);color:var(--sel-ink)}

@@ -1949,7 +1949,7 @@ sync();
 // ---- Tools: cost & vial planner (a what-if calculator; nothing here changes your cycles) ----
 (function planner(){
 const PKEY = 'pcl-planner-v1';
-const blank = () => ({cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, dpw: 7, weeks: 8, indefinite: false, titrate: false, steps: []});
+const blank = () => ({cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, days: [1,2,3,4,5,6,0], eod: false, weeks: 8, indefinite: false, titrate: false, steps: []});
 let P = (() => { try { return {...blank(), ...JSON.parse(localStorage.getItem(PKEY) || '{}')}; } catch { return blank(); } })();
 const save = () => { try { localStorage.setItem(PKEY, JSON.stringify(P)); } catch {} };
 const fam = u => u === 'IU' ? 'IU' : 'mg';
@@ -1972,7 +1972,7 @@ q.vialUnit = c.unit === 'IU' ? 'IU' : 'mg';
 const base = c.dose;
 if (base != null){ if (c.unit === 'units' || c.unit === 'mL'){ const mg = mgOf(c, base); if (mg != null){ q.doseAmt = +mg.toFixed(4); q.doseUnit = 'mg'; } } else { q.doseAmt = base; q.doseUnit = c.unit === 'IU' ? 'IU' : c.unit === 'mcg' ? 'mcg' : 'mg'; } }
 q.perDay = c.perDay || 1;
-q.dpw = c.interval > 1 ? 3.5 : (c.days || []).length || 7;
+q.eod = c.interval > 1; q.days = q.eod ? [] : [...(c.days || [1,2,3,4,5,6,0])];
 if (isOpen(c)) q.indefinite = true; else q.weeks = c.lenUnit === 'days' ? Math.max(1, Math.round(c.lenValue / 7)) : c.lenValue || 8;
 const pl = (c.plan || []).map(p => ({week: p.week != null ? p.week : Math.floor(idxOfDate(c, parse(p.date)) / 7) + 1, dose: p.dose})).filter(p => p.week >= 2);
 if (c.titrate && pl.length){ q.titrate = true; q.steps = pl.map(p => ({week: p.week, dose: (c.unit === 'units' || c.unit === 'mL') && mgOf(c, p.dose) != null ? +mgOf(c, p.dose).toFixed(4) : p.dose})); }
@@ -2003,7 +2003,9 @@ $('plannerBody').innerHTML = `
 <div class="field"><label class="label" for="pl-dose">${P.titrate ? 'Starting dose' : 'Dose'} (per injection)</label>
 <div class="inline"><input id="pl-dose" type="number" min="0" step="any" inputmode="decimal" placeholder="0.25" value="${P.doseAmt}"><select id="pl-dunit">${['mg', 'mcg', 'IU'].map(u => `<option${P.doseUnit === u ? ' selected' : ''}>${u}</option>`).join('')}</select></div></div>
 <div class="prow2"><div class="field"><label class="label" for="pl-perday">Doses per day</label><select id="pl-perday">${[1, 2, 3, 4].map(k => `<option value="${k}"${+P.perDay === k ? ' selected' : ''}>${k}× a day</option>`).join('')}</select></div>
-<div class="field"><label class="label" for="pl-dpw">Days per week</label><select id="pl-dpw">${[[7, 'Daily'], [6, '6 days'], [5, '5 days'], [4, '4 days'], [3.5, 'Every other day'], [3, '3 days'], [2, '2 days'], [1, '1 day']].map(([v, l]) => `<option value="${v}"${+P.dpw === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
+</div>
+<div class="field"><span class="label">Days used</span><div class="days pldays" id="pl-days"></div>
+<div class="quick">${[['0,1,2,3,4,5,6', 'Daily'], ['1,2,3,4,5', 'Mon–Fri'], ['1,3,5', 'M / W / F'], ['1,4', 'Mon / Thu'], ['1', 'Weekly (Mon)'], ['eod', 'Every other day']].map(([v, l]) => `<button type="button" class="link" data-plpreset="${v}">${l}</button>`).join('')}</div></div>
 <div id="pl-steps"></div></div>
 
 <div class="pgroup"><span class="label">Length</span>
@@ -2012,7 +2014,13 @@ $('plannerBody').innerHTML = `
 
 <div id="pl-results" aria-live="polite"></div>
 <div class="actions" style="justify-content:space-between"><button type="button" class="link" data-plan-reset>Clear</button><button type="button" class="btn" data-planner-close>Done</button></div>`;
-renderSteps(); calc();
+renderSteps(); renderPlDays(); calc();
+}
+function renderPlDays(){
+const el = $('pl-days'); if (!el) return;
+if (!Array.isArray(P.days)) P.days = [1,2,3,4,5,6,0];
+el.innerHTML = [1,2,3,4,5,6,0].map(i => `<button type="button" class="day" data-plday="${i}" aria-pressed="${!P.eod && P.days.includes(i)}">${DAYNAME[i]}</button>`).join('');
+document.querySelectorAll('[data-plpreset]').forEach(b => b.classList.toggle('on', b.dataset.plpreset === 'eod' ? !!P.eod : !P.eod && b.dataset.plpreset === P.days.slice().sort().join(',')));
 }
 
 function renderSteps(){
@@ -2028,12 +2036,13 @@ ${P.steps.map((st, i) => `<div class="plstep"><span>Week</span><input type="numb
 const doseAt = (w, start, steps) => { let d = start; steps.forEach(s => { if (s.week <= w) d = s.dose; }); return d; };
 function calc(){
 const out = $('pl-results'); if (!out) return;
-const price = n2(P.price), vamt = n2(P.vialAmt), ml = n2(P.ml), dose = n2(P.doseAmt), perDay = +P.perDay || 1, dpw = +P.dpw || 7;
+const price = n2(P.price), vamt = n2(P.vialAmt), ml = n2(P.ml), dose = n2(P.doseAmt), perDay = +P.perDay || 1, dpw = P.eod ? 3.5 : (P.days || []).length;
 const vialCost = price == null ? null : P.priceMode === 'kit' ? price / 10 : P.priceMode === 'half' ? price / 5 : price;
 $('pl-vialcost').textContent = vialCost != null && P.priceMode !== 'vial' ? `= ${money(vialCost)} per vial` : '';
 const err = m => { out.innerHTML = `<div class="plres empty">${m}</div>`; };
 if (!(vamt > 0)) return err('Enter the vial size to see vials and cost.');
 if (!(dose > 0)) return err('Enter a dose.');
+if (!dpw) return err('Pick at least one day.');
 if (fam(P.doseUnit) !== fam(P.vialUnit)) return err(`The dose is in ${P.doseUnit} but the vial is in ${P.vialUnit}. Use the same kind of unit (mg/mcg or IU).`);
 const unit = P.vialUnit;
 let steps = [];
@@ -2067,11 +2076,11 @@ const rows = phases.filter(p => p.from <= lastW).map(p => { const u = unitsFor(p
 return `<div class="plph"><span>${P.indefinite && p.to === lastW && phases.length > 1 ? `Wk ${p.from}+` : p.from === p.to ? `Wk ${p.from}` : `Wk ${p.from}–${p.to}`}</span><b>${fmtAmt(p.dose, unit)}${perDay > 1 ? ' × ' + perDay : ''}</b><span${u > 100 ? ' class="over" title="More than one full U-100 syringe"' : ''}>${u != null ? `${+u.toFixed(1)} units${u > 100 ? ' ⚠' : ''}` : ''}</span><span class="muted">${fmtAmt(p.dose * perWeek * wks, unit)}</span></div>`; }).join('');
 out.innerHTML = `${cards}
 <div class="plbreak"><span class="label">${steps.length ? 'Titration breakdown' : 'Dose breakdown'}</span>${rows}
-<span class="hint">${conc ? `Concentration ${num(+conc.toFixed(3))} ${unit}/mL on a U-100 syringe.` : 'Add the BAC water (or vial mL) to see syringe units.'}${phases.some(p => (unitsFor(p.dose) || 0) > 100) ? ' ⚠ Doses over 100 units need more than one full syringe; more BAC water lowers the units.' : ''} ${num(+perWeek.toFixed(1))} injection${perWeek === 1 ? '' : 's'} a week.</span></div>`;
+<span class="hint">${conc ? `Concentration ${num(+conc.toFixed(3))} ${unit}/mL on a U-100 syringe.` : 'Add the BAC water (or vial mL) to see syringe units.'}${phases.some(p => (unitsFor(p.dose) || 0) > 100) ? ' ⚠ Doses over 100 units need more than one full syringe; more BAC water lowers the units.' : ''} ${P.eod ? 'Every other day, about ' : ''}${num(+perWeek.toFixed(1))} injection${perWeek === 1 ? '' : 's'} a week.</span></div>`;
 }
 
 // inputs
-const map = {'pl-name': 'name', 'pl-price': 'price', 'pl-vamt': 'vialAmt', 'pl-vunit': 'vialUnit', 'pl-ml': 'ml', 'pl-dose': 'doseAmt', 'pl-dunit': 'doseUnit', 'pl-perday': 'perDay', 'pl-dpw': 'dpw', 'pl-weeks': 'weeks'};
+const map = {'pl-name': 'name', 'pl-price': 'price', 'pl-vamt': 'vialAmt', 'pl-vunit': 'vialUnit', 'pl-ml': 'ml', 'pl-dose': 'doseAmt', 'pl-dunit': 'doseUnit', 'pl-perday': 'perDay', 'pl-weeks': 'weeks'};
 document.addEventListener('input', e => {
 if ($('plannerPop').hidden) return;
 const t = e.target;
@@ -2097,6 +2106,8 @@ if (k === 'titrate' && P.titrate && !P.steps.length) P.steps = [{week: 3, dose: 
 seg.parentElement.querySelectorAll('[data-pv]').forEach(b => b.setAttribute('aria-checked', String(b === seg)));
 if (k === 'titrate'){ const l = document.querySelector('label[for="pl-dose"]'); if (l) l.textContent = (P.titrate ? 'Starting dose' : 'Dose') + ' (per injection)'; renderSteps(); }
 save(); return calc(); }
+const pd = e.target.closest('[data-plday]'); if (pd){ const i = +pd.dataset.plday; if (P.eod){ P.eod = false; P.days = [i]; } else P.days = P.days.includes(i) ? P.days.filter(x => x !== i) : [...P.days, i]; save(); renderPlDays(); return calc(); }
+const pp = e.target.closest('[data-plpreset]'); if (pp){ if (pp.dataset.plpreset === 'eod'){ P.eod = true; P.days = []; } else { P.eod = false; P.days = pp.dataset.plpreset.split(',').map(Number); } save(); renderPlDays(); return calc(); }
 if (e.target.closest('[data-sadd]')){ const last = P.steps[P.steps.length - 1]; P.steps.push({week: last && parseInt(last.week, 10) ? parseInt(last.week, 10) + 2 : 3, dose: ''}); save(); renderSteps(); return calc(); }
 const rm = e.target.closest('[data-srm]'); if (rm){ P.steps.splice(+rm.dataset.srm, 1); save(); renderSteps(); return calc(); }
 if (e.target.closest('[data-plan-reset]')){ P = blank(); save(); return render(); }
