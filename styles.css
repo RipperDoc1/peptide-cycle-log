@@ -843,3 +843,17 @@ header h1{padding-right:54px}
 :root[data-theme="halloween"] .wrap{position:relative;z-index:1}
 :root[data-theme="halloween"] .brandmark{color:#e8650f}
 :root[data-theme="halloween"] [data-theme-set]{white-space:nowrap}
+/* "Halloween skin is live" pop-up: always shows the spooky look as a preview */
+.hwpop .sheet{background:#141015;color:#ffd3a3}
+.hwpop .sheet-x{background:#2a1d14;color:#ffd3a3}
+.hw-body{text-align:center}
+.hw-pk{width:96px;margin:0 auto 6px}
+.hw-pk svg{width:100%;height:auto;display:block}
+.hw-title{font-family:"Griffy","Figtree",system-ui,sans-serif;font-weight:400;font-size:1.9rem;line-height:1.15;margin:4px 0 8px;color:#ffb36b}
+.hwpop p{color:#f0c79c;margin:0 0 14px}
+.hwpop .hint{color:#b8865a;margin:12px 0 0}
+.hw-actions{display:flex;gap:10px;justify-content:center}
+.hw-actions .btn{flex:1;max-width:180px}
+.hwpop .btn:not(.ghost){background:#e8650f;color:#140a02;border-color:#e8650f}
+.hwpop .btn.ghost{background:#2a1d14;color:#ffd3a3;border-color:#3d2a1c}
+.hwpop .sheet-bar{background:transparent;border:0}

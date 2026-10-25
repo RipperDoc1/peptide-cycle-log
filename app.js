@@ -1769,6 +1769,31 @@ const WN = [
 <li>Light/dark mode</li>
 </ul>`}];
 let wnShown = false;
+// one-time "Halloween skin is live" pop-up (Oct 1 – Nov 7), after What's new; skipped if they already use it
+let hwShown = false;
+function maybeHalloween(){
+if (hwShown || !sessionUser) return;
+const now = new Date(); if (!(now.getMonth() === 9 || (now.getMonth() === 10 && now.getDate() <= 7))) return;
+const key = 'pcl-hw26-' + sessionUser.id;
+let done = null, theme = null; try { done = localStorage.getItem(key); theme = localStorage.getItem('pcl-theme'); } catch {}
+if (done || theme === 'halloween' || sheetId || vialSheetId) return;
+hwShown = true;
+const el = document.createElement('div');
+el.className = 'sheet-wrap anim wn hwpop';
+el.innerHTML = `<div class="sheet-bg" data-hw="later"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hwTitle"><div class="sheet-bar"><button type="button" class="sheet-x" data-hw="later" aria-label="Close">✕</button></div>
+<div class="wn-body hw-body"><div class="hw-pk" aria-hidden="true"><svg viewBox="0 0 100 86"><path d="M50 14c2-8 8-12 14-10-4 3-7 7-8 12z" fill="#4c7a2c"/><ellipse cx="30" cy="48" rx="24" ry="30" fill="#e8741c"/><ellipse cx="70" cy="48" rx="24" ry="30" fill="#e8741c"/><ellipse cx="50" cy="48" rx="26" ry="33" fill="#f4892a"/><path d="M50 16v64M34 18c-6 18-6 44 0 60M66 18c6 18 6 44 0 60" stroke="#c95f12" stroke-width="2" fill="none" opacity=".6"/><path d="M33 42l9-10 6 12zM67 42l-9-10-6 12zM46 52l4-7 4 7z" fill="#2a1402"/><path d="M30 60q20 14 40 0l-4 9q-16 8-32 0z" fill="#2a1402"/><path d="M44 62v4h5v-3zM55 63v4h5v-5z" fill="#f4892a"/></svg></div>
+<h2 class="hw-title" id="hwTitle">The Halloween skin is live!</h2>
+<p>Black background, orange cards, a spooky header font and pumpkins on your Home screen. It’s here until Nov&nbsp;7.</p>
+<div class="actions hw-actions"><button type="button" class="btn ghost" data-hw="later">Maybe later</button><button type="button" class="btn" data-hw="on">Turn it on</button></div>
+<p class="hint">You can turn it on anytime in Settings → Appearance.</p></div></div>`;
+document.body.appendChild(el); document.documentElement.classList.add('sheet-open');
+el.addEventListener('click', e => {
+const b = e.target.closest('[data-hw]'); if (!b) return;
+if (b.dataset.hw === 'on'){ const t = document.querySelector('[data-theme-set="halloween"]'); if (t) t.click(); }
+el.remove(); if (!sheetId && !vialSheetId) document.documentElement.classList.remove('sheet-open');
+try { localStorage.setItem(key, b.dataset.hw); } catch {}
+});
+}
 function maybeWhatsNew(){
 if (wnShown || !sessionUser || !profile) return;
 const key = 'pcl-wn-' + sessionUser.id;
@@ -1777,7 +1802,7 @@ const meta = (sessionUser.user_metadata || {}).whatsNew;
 const seen = Math.max(WN_RANK[local] || 0, WN_RANK[meta] || 0);
 // unseen updates, skipping ones released before the account existed (new users already have those features)
 const todo = WN.filter(u => u.rank > seen && !(profile.created && profile.created >= Date.parse(u.date + 'T23:59:59-07:00')));
-if (!todo.length){ if (seen < WN_RANK[WN_ID]) { try { localStorage.setItem(key, WN_ID); } catch {} } return; }
+if (!todo.length){ if (seen < WN_RANK[WN_ID]) { try { localStorage.setItem(key, WN_ID); } catch {} } return maybeHalloween(); }
 const WN_HTML = `<h2 class="wn-title">What’s new</h2>` + todo.map((u, i) => `<p class="wn-ver${i ? ' prev' : ''}">Update ${u.ver}</p>${u.html}`).join('');
 wnShown = true;
 const el = document.createElement('div');
@@ -1789,6 +1814,7 @@ if (!e.target.closest('[data-wn-close]')) return;
 el.remove(); if (!sheetId) document.documentElement.classList.remove('sheet-open');
 try { localStorage.setItem(key, WN_ID); } catch {}
 try { const r = sb.auth.updateUser && sb.auth.updateUser({data: {whatsNew: WN_ID}}); if (r && r.catch) r.catch(() => {}); } catch {}
+setTimeout(maybeHalloween, 300);
 });
 }
 async function loadAll(){
