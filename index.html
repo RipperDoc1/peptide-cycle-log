@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#f3f3f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
-<script>try{var t=localStorage.getItem('pcl-theme');if(t==='light'||t==='dark'||t==='halloween')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+<script>try{var t=localStorage.getItem('pcl-theme');if(t==='light'||t==='dark'||t==='halloween'||t==='skeleton')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Peptides">
@@ -21,6 +21,23 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div class="bones" aria-hidden="true"><svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice"><defs><g id="sk" fill="none" stroke="#ece6d8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M30 6c-11 0-18 8-18 18 0 6 3 10 7 13v7h22v-7c4-3 7-7 7-13 0-10-7-18-18-18z" fill="#ece6d8" stroke="none"/>
+<ellipse cx="23" cy="24" rx="4.6" ry="5.4" fill="#0b0a0c" stroke="none"/><ellipse cx="37" cy="24" rx="4.6" ry="5.4" fill="#0b0a0c" stroke="none"/>
+<path d="M30 30l-2.4 5h4.8z" fill="#0b0a0c" stroke="none"/>
+<path d="M23 40v4M27 40v4M31 40v4M35 40v4" stroke="#0b0a0c" stroke-width="1.6"/>
+<path d="M30 46v52"/>
+<path d="M18 56q12 -5 24 0M17 64q13 -5 26 0M18 72q12 -5 24 0M20 80q10 -4 20 0"/>
+<path d="M18 52q-8 10-12 24l-5 18M42 52q8 10 12 24l5 18"/>
+<path d="M20 98q10 8 20 0l-2 6q-8 5-16 0z" fill="#ece6d8"/>
+<path d="M23 104l-4 26-2 26M37 104l4 26 2 26"/>
+<path d="M17 156h-7M43 156h7M1 94l-3 6M59 94l3 6"/>
+</g></defs>
+<use href="#sk" transform="translate(-16 118) scale(1.08)"/>
+<use href="#sk" transform="translate(352 132) scale(1)"/>
+<use href="#sk" transform="translate(150 196) scale(.6)"/>
+<use href="#sk" transform="translate(262 214) scale(.5) rotate(-6)"/>
+</svg></div>
 <div class="spooky" aria-hidden="true"><svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice">
 <defs><g id="pk">
 <path d="M50 14c2-8 8-12 14-10-4 3-7 7-8 12z" fill="#4c7a2c"/>
@@ -250,8 +267,9 @@
 <h2 id="setTitle">Settings</h2>
 <div class="set-user"><span class="set-avatar" id="setInitial" aria-hidden="true">T</span><div><b id="setName"></b><span id="setTg"></span><span id="setEmail"></span></div></div>
 <div class="set-group"><span class="label">Appearance</span>
-<div class="seg themeseg" role="radiogroup" aria-label="Appearance"><button type="button" role="radio" data-theme-set="light">Light</button><button type="button" role="radio" data-theme-set="dark">Dark</button><button type="button" role="radio" data-theme-set="auto">Auto</button><button type="button" role="radio" data-theme-set="halloween" id="themeHalloween">Halloween</button></div>
-<span class="hint">Auto follows your phone’s setting.</span></div>
+<div class="seg themeseg" role="radiogroup" aria-label="Appearance"><button type="button" role="radio" data-theme-set="light">Light</button><button type="button" role="radio" data-theme-set="dark">Dark</button><button type="button" role="radio" data-theme-set="auto">Auto</button></div>
+<span class="hint">Auto follows your phone’s setting.</span>
+<div class="hwrow" id="themeHalloween"><span class="label sm">Halloween</span><div class="seg themeseg" role="radiogroup" aria-label="Halloween skins"><button type="button" role="radio" data-theme-set="halloween">🎃 Pumpkins</button><button type="button" role="radio" data-theme-set="skeleton">💀 Skeletons</button></div></div></div>
 <div class="set-group"><span class="label">Contact me</span><button type="button" class="setitem" id="contactBtn">Send a suggestion or report an issue<span aria-hidden="true">›</span></button></div>
 <div class="set-group"><span class="label">Disclaimer</span><div class="setnote" id="setConsent"></div></div>
 <div class="set-group"><span class="label">Account</span>

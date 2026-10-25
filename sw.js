@@ -1,7 +1,7 @@
 // Keeps a copy of the app on the phone so it opens offline.
 // Network first (so updates show right away), falling back to the saved copy
 // when offline or the network is slow. Supabase API calls are never cached.
-const CACHE = 'pcl-shell-v6';
+const CACHE = 'pcl-shell-v7';
 const SHELL = ['./', 'styles.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'apple-touch-icon.png', 'favicon.png',
   'vendor/supabase-2.45.4.js', 'vendor/jspdf-2.5.1.min.js', 'vendor/griffy-400.woff2'];
 const TIMEOUT = 3000;

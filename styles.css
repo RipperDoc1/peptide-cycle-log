@@ -867,3 +867,25 @@ header h1{padding-right:54px}
 .fbhead .hint{display:inline}
 .fbhead .link{margin-left:auto;font-size:.82rem}
 .fbrow p{margin:6px 0 0;white-space:pre-wrap;line-height:1.45}
+
+/* ---- Skeleton skin (temporary): black background, charcoal cards with spider webs, bone-white accents ---- */
+.bones{display:none}
+:root[data-theme="skeleton"]{
+--bg:#060607; --bg-top:#141418; --surface:#18181c; --sunken:#222228; --ink:#ece6d8; --muted:#a39d90; --line:#2e2e35;
+--accent:#ece6d8; --accent-ink:#0b0a0c; --accent-soft:#2a2a31; --hi:#c9b8ff;
+--ok:#9be36b; --ok-soft:#1d2a17; --warn:#f0b35a; --warn-soft:#30261a; --done:#a39d90; --done-soft:#24242a;
+--danger:#ff8a7a; --pause:#c9b8ff; --pause-soft:#28233a;
+--sel:#ece6d8; --sel-ink:#0b0a0c; --btn:#26262c; --btn-line:#34343c;
+--am:#ffa36b;--am-soft:#2e2119;--pm:#f2cf6b;--pm-soft:#2c2716;--night:#b6a8ff;--night-soft:#221f36;--any:#a39d90;--any-soft:#222228;
+--shadow:0 1px 2px rgba(0,0,0,.5),0 6px 22px rgba(0,0,0,.45);
+--f-display:"Griffy","Figtree",system-ui,sans-serif; color-scheme:dark;
+}
+:root[data-theme="skeleton"] h1,:root[data-theme="skeleton"] h2{font-family:var(--f-display);font-weight:400;letter-spacing:.01em}
+:root[data-theme="skeleton"] .brandmark{color:#ece6d8}
+:root[data-theme="skeleton"] .panel,:root[data-theme="skeleton"] .sheet{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g transform='' fill='none' stroke='%23ece6d8' stroke-opacity='.28' stroke-width='1.1' stroke-linecap='round'><path d='M0 0L100.0 0.0 M0 0L95.1 30.9 M0 0L80.9 58.8 M0 0L58.8 80.9 M0 0L30.9 95.1 M0 0L0.0 100.0 M18.0 0.0Q15.1 2.4 17.1 5.6Q13.6 6.9 14.6 10.6Q10.8 10.8 10.6 14.6Q6.9 13.6 5.6 17.1Q2.4 15.1 0.0 18.0 M34.0 0.0Q28.5 4.5 32.3 10.5Q25.7 13.1 27.5 20.0Q20.4 20.4 20.0 27.5Q13.1 25.7 10.5 32.3Q4.5 28.5 0.0 34.0 M52.0 0.0Q43.6 6.9 49.5 16.1Q39.4 20.1 42.1 30.6Q31.2 31.2 30.6 42.1Q20.1 39.4 16.1 49.5Q6.9 43.6 0.0 52.0 M72.0 0.0Q60.4 9.6 68.5 22.2Q54.5 27.8 58.2 42.3Q43.2 43.2 42.3 58.2Q27.8 54.5 22.2 68.5Q9.6 60.4 0.0 72.0 M92.0 0.0Q77.2 12.2 87.5 28.4Q69.6 35.5 74.4 54.1Q55.3 55.3 54.1 74.4Q35.5 69.6 28.4 87.5Q12.2 77.2 0.0 92.0'/><path d='M60 46 l0 14' stroke-opacity='.5'/><circle cx='60' cy='63' r='3.2' fill='%23ece6d8' fill-opacity='.55' stroke='none'/></g></svg>"),url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g transform='translate(100 100) scale(-1 -1)' fill='none' stroke='%23ece6d8' stroke-opacity='.28' stroke-width='1.1' stroke-linecap='round'><path d='M0 0L100.0 0.0 M0 0L95.1 30.9 M0 0L80.9 58.8 M0 0L58.8 80.9 M0 0L30.9 95.1 M0 0L0.0 100.0 M18.0 0.0Q15.1 2.4 17.1 5.6Q13.6 6.9 14.6 10.6Q10.8 10.8 10.6 14.6Q6.9 13.6 5.6 17.1Q2.4 15.1 0.0 18.0 M34.0 0.0Q28.5 4.5 32.3 10.5Q25.7 13.1 27.5 20.0Q20.4 20.4 20.0 27.5Q13.1 25.7 10.5 32.3Q4.5 28.5 0.0 34.0 M52.0 0.0Q43.6 6.9 49.5 16.1Q39.4 20.1 42.1 30.6Q31.2 31.2 30.6 42.1Q20.1 39.4 16.1 49.5Q6.9 43.6 0.0 52.0 M72.0 0.0Q60.4 9.6 68.5 22.2Q54.5 27.8 58.2 42.3Q43.2 43.2 42.3 58.2Q27.8 54.5 22.2 68.5Q9.6 60.4 0.0 72.0 M92.0 0.0Q77.2 12.2 87.5 28.4Q69.6 35.5 74.4 54.1Q55.3 55.3 54.1 74.4Q35.5 69.6 28.4 87.5Q12.2 77.2 0.0 92.0'/></g></svg>");background-repeat:no-repeat;background-position:top left,bottom right;background-size:70px 70px,60px 60px}
+:root[data-theme="skeleton"] .bones{position:fixed;left:0;right:0;bottom:0;height:min(62vh,500px);z-index:0;pointer-events:none;opacity:.34}
+:root[data-theme="skeleton"] .bones svg{width:100%;height:100%;display:block}
+:root[data-theme="skeleton"] body:not([data-view="home"]) .bones{display:none}
+:root[data-theme="skeleton"] body[data-view="home"] .bones{display:block}
+:root[data-theme="skeleton"] .wrap{position:relative;z-index:1}
+.hwrow{display:flex;flex-direction:column;gap:6px;margin-top:4px}

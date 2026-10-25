@@ -1779,7 +1779,7 @@ if (hwShown || !sessionUser) return;
 const now = new Date(); if (!(now.getMonth() === 9 || (now.getMonth() === 10 && now.getDate() <= 7))) return;
 const key = 'pcl-hw26-' + sessionUser.id;
 let done = null, theme = null; try { done = localStorage.getItem(key); theme = localStorage.getItem('pcl-theme'); } catch {}
-if (done || theme === 'halloween' || sheetId || vialSheetId) return;
+if (done || theme === 'halloween' || theme === 'skeleton' || sheetId || vialSheetId) return;
 hwShown = true;
 const el = document.createElement('div');
 el.className = 'sheet-wrap anim wn hwpop';
@@ -2024,14 +2024,14 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetI
 const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
 // the Halloween skin is temporary: offered until Nov 7, then anyone using it goes back to Auto
 const now = new Date(), spooky = now.getMonth() === 9 || (now.getMonth() === 10 && now.getDate() <= 7);
-const PICKS = ['light', 'dark', 'halloween'];
+const PICKS = ['light', 'dark', 'halloween', 'skeleton'];
 const stored = () => { try { return localStorage.getItem('pcl-theme'); } catch { return null; } };
-if (!spooky && stored() === 'halloween'){ document.documentElement.removeAttribute('data-theme'); try { localStorage.removeItem('pcl-theme'); } catch {} }
+if (!spooky && (stored() === 'halloween' || stored() === 'skeleton')){ document.documentElement.removeAttribute('data-theme'); try { localStorage.removeItem('pcl-theme'); } catch {} }
 const hb = document.getElementById('themeHalloween'); if (hb) hb.hidden = !spooky;
 const cur = () => document.documentElement.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light');
 const sync = () => { const pick = PICKS.includes(stored()) ? stored() : 'auto';
 document.querySelectorAll('[data-theme-set]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeSet === pick)));
-document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', cur() === 'halloween' ? '#0b0a0c' : cur() === 'dark' ? '#0f1115' : '#f3f3f6')); };
+document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', cur() === 'halloween' || cur() === 'skeleton' ? '#0b0a0c' : cur() === 'dark' ? '#0f1115' : '#f3f3f6')); };
 document.addEventListener('click', e => { const b = e.target.closest('[data-theme-set]'); if (!b) return; const t = b.dataset.themeSet;
 if (t === 'auto'){ document.documentElement.removeAttribute('data-theme'); try { localStorage.removeItem('pcl-theme'); } catch {} }
 else { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('pcl-theme', t); } catch {} }
