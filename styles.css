@@ -812,3 +812,9 @@ header h1{padding-right:54px}
 .planner.page .pgroup input,.planner.page .pgroup select{background:var(--sunken)}
 .planner.page .pldays .day,.planner.page .pgroup .quick .link{background:var(--btn)}
 .planner.page .pldays .day[aria-pressed="true"],.planner.page .pgroup .quick .link.on{background:var(--sel);color:var(--sel-ink)}
+.label.sm{font-size:.78rem;margin-top:4px}
+.plsup{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line)}
+.plsup div{display:flex;flex-direction:column}
+.plsup b{font-size:1.25rem;font-weight:800;line-height:1.15}
+.plsup span{color:var(--muted);font-size:.8rem}
+#pl-bacrow[hidden]{display:none}

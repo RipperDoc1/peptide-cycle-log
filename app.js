@@ -1964,7 +1964,7 @@ sync();
 // ---- Tools: cost & vial planner (a what-if calculator; nothing here changes your cycles) ----
 (function planner(){
 const PKEY = 'pcl-planner-v1';
-const blank = () => ({pid: '', cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, days: [1,2,3,4,5,6,0], eod: false, weeks: 8, indefinite: false, titrate: false, steps: []});
+const blank = () => ({pid: '', cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, days: [1,2,3,4,5,6,0], eod: false, weeks: 8, indefinite: false, titrate: false, steps: [], method: 'syringe', bacBottle: '10'});
 let P = (() => { try { return {...blank(), ...JSON.parse(localStorage.getItem(PKEY) || '{}')}; } catch { return blank(); } })();
 const save = () => { try { localStorage.setItem(PKEY, JSON.stringify(P)); } catch {} };
 const fam = u => u === 'IU' ? 'IU' : 'mg';
@@ -2053,6 +2053,12 @@ $('plannerBody').innerHTML = `
 <div class="inline"><input id="pl-weeks" type="number" min="1" step="1" inputmode="numeric" value="${P.weeks}"${P.indefinite ? ' disabled' : ''}><span class="suffix">weeks</span></div>
 <label class="chk"><input type="checkbox" id="pl-indef"${P.indefinite ? ' checked' : ''}> Indefinite (show 3 months, 6 months and 1 year)</label></div>
 
+<div class="pgroup"><span class="label">Supplies</span>
+<span class="label sm">Injecting with</span>
+<div class="seg pseg" data-pk="method"><button type="button" data-pv="syringe" aria-checked="${P.method !== 'pen'}">Syringes</button><button type="button" data-pv="pen" aria-checked="${P.method === 'pen'}">Peptide pen</button></div>
+<div id="pl-bacrow"${P.liquid ? ' hidden' : ''}><span class="label sm">BAC water bottle size</span>
+<div class="seg pseg" data-pk="bacBottle">${['3', '10', '30'].map(v => `<button type="button" data-pv="${v}" aria-checked="${String(P.bacBottle) === v}">${v} mL</button>`).join('')}</div></div></div>
+
 <div id="pl-results" aria-live="polite"></div>
 <div class="plactions">
 <button type="button" class="btn" data-plan-save>${P.pid ? 'Update protocol' : 'Save protocol'}</button>
@@ -2107,14 +2113,27 @@ steps.push({week: s.week, dose: toVial(s.dose, P.doseUnit)});
 const d0 = toVial(dose, P.doseUnit), perWeek = dpw * perDay;
 const conc = ml > 0 ? vamt / ml : null;
 const unitsFor = d => conc ? d / conc * 100 : null;
+const pen = P.method === 'pen';
+// smallest U-100 syringe that holds the largest single draw
+const maxU = Math.max(...[d0, ...steps.map(s => s.dose)].map(d => unitsFor(d) || 0));
+const syrSize = !conc ? '' : maxU <= 30 ? '0.3 mL / 30 unit' : maxU <= 50 ? '0.5 mL / 50 unit' : '1 mL / 100 unit';
 const periods = P.indefinite ? [[13, '3 months'], [26, '6 months'], [52, '1 year']] : [[Math.max(1, parseInt(P.weeks, 10) || 0), `${parseInt(P.weeks, 10) || 0} week${(parseInt(P.weeks, 10) || 0) === 1 ? '' : 's'}`]];
 const cards = periods.map(([W, label]) => {
 let total = 0; for (let w = 1; w <= W; w++) total += doseAt(w, d0, steps) * perWeek;
 const vials = Math.ceil(total / vamt - 1e-9), cost = vialCost != null ? vials * vialCost : null, left = vials * vamt - total;
 const kits = P.priceMode === 'kit' ? Math.ceil(vials / 10) : P.priceMode === 'half' ? Math.ceil(vials / 5) : null;
+// injections: exact count of every-other-day shots over the period, otherwise days/week × weeks
+const shots = w => P.eod ? (Math.ceil(w * 7 / 2) - Math.ceil((w - 1) * 7 / 2)) * perDay : perWeek;
+let inj = 0, syr = 0;
+for (let w = 1; w <= W; w++){ const n = shots(w), u = unitsFor(doseAt(w, d0, steps)); inj += n; syr += n * (pen || !(u > 100) ? 1 : Math.ceil(u / 100 - 1e-9)); }
+const bacMl = !P.liquid && ml > 0 ? vials * ml : null, bsz = +P.bacBottle || 10, bottles = bacMl != null ? Math.ceil(bacMl / bsz - 1e-9) : null;
+const supplies = `<div class="plsup">
+<div><b>${num(syr)}</b><span>${pen ? 'pen needle tip' : 'syringe'}${syr === 1 ? '' : 's'}${!pen && syrSize ? ` (${syrSize})` : ''}</span></div>
+${P.liquid ? '' : `<div><b>${bottles != null ? bottles : '—'}</b><span>${bottles != null ? `${bsz} mL BAC bottle${bottles === 1 ? '' : 's'}<br>${num(+bacMl.toFixed(2))} mL used` : 'BAC bottles (add mL)'}</span></div>`}
+</div>`;
 return `<div class="plres"><div class="plres-h">${label}</div>
 <div class="plnums"><div><b>${vials}</b><span>vial${vials === 1 ? '' : 's'}</span></div><div><b>${cost != null ? money(cost) : '—'}</b><span>total cost</span></div></div>
-<div class="plsub">${fmtAmt(total, unit)} total · ${fmtAmt(left, unit)} left over${cost != null ? ` · ${money(cost / W)}/week · ${money(cost / W * 52 / 12)}/month` : ''}${kits != null ? ` · ${kits} ${P.priceMode === 'kit' ? 'kit' : 'half kit'}${kits === 1 ? '' : 's'} (${money(kits * price)})` : ''}</div></div>`;
+<div class="plsub">${fmtAmt(total, unit)} total · ${fmtAmt(left, unit)} left over${cost != null ? ` · ${money(cost / W)}/week · ${money(cost / W * 52 / 12)}/month` : ''}${kits != null ? ` · ${kits} ${P.priceMode === 'kit' ? 'kit' : 'half kit'}${kits === 1 ? '' : 's'} (${money(kits * price)})` : ''}</div>${supplies}</div>`;
 }).join('');
 // dose breakdown (static or by titration phase)
 const lastW = periods[periods.length - 1][0];
@@ -2123,7 +2142,8 @@ const rows = phases.filter(p => p.from <= lastW).map(p => { const u = unitsFor(p
 return `<div class="plph"><span>${P.indefinite && p.to === lastW && phases.length > 1 ? `Wk ${p.from}+` : p.from === p.to ? `Wk ${p.from}` : `Wk ${p.from}–${p.to}`}</span><b>${fmtAmt(p.dose, unit)}${perDay > 1 ? ' × ' + perDay : ''}</b><span${u > 100 ? ' class="over" title="More than one full U-100 syringe"' : ''}>${u != null ? `${+u.toFixed(1)} units${u > 100 ? ' ⚠' : ''}` : ''}</span><span class="muted">${fmtAmt(p.dose * perWeek * wks, unit)}</span></div>`; }).join('');
 out.innerHTML = `${cards}
 <div class="plbreak"><span class="label">${steps.length ? 'Titration breakdown' : 'Dose breakdown'}</span>${rows}
-<span class="hint">${conc ? `Concentration ${num(+conc.toFixed(3))} ${unit}/mL on a U-100 syringe.` : 'Add the BAC water (or vial mL) to see syringe units.'}${phases.some(p => (unitsFor(p.dose) || 0) > 100) ? ' ⚠ Doses over 100 units need more than one full syringe; more BAC water lowers the units.' : ''} ${P.eod ? 'Every other day, about ' : ''}${num(+perWeek.toFixed(1))} injection${perWeek === 1 ? '' : 's'} a week.</span></div>`;
+<span class="hint">${conc ? `Concentration ${num(+conc.toFixed(3))} ${unit}/mL on a U-100 syringe.` : 'Add the BAC water (or vial mL) to see syringe units.'}${phases.some(p => (unitsFor(p.dose) || 0) > 100) ? ' ⚠ Doses over 100 units need more than one full syringe; more BAC water lowers the units.' : ''} ${P.eod ? 'Every other day, about ' : ''}${num(+perWeek.toFixed(1))} injection${perWeek === 1 ? '' : 's'} a week.</span>
+<span class="hint">${pen ? 'One new pen needle tip per injection.' : 'One new syringe per injection' + (phases.some(p => (unitsFor(p.dose) || 0) > 100) ? ', plus extra for draws over 100 units.' : '.')}${P.liquid ? '' : ' BAC water counts the mL to mix every vial; opened bottles are usually labeled for 28 days, so long cycles may need a fresh bottle sooner.'}</span></div>`;
 }
 
 // inputs
@@ -2141,7 +2161,7 @@ document.addEventListener('change', e => {
 if ($('plannerPop').hidden) return;
 const t = e.target;
 if (t.id === 'pl-cycle'){ const c = cycles.find(x => x.id === t.value); P = c ? fromCycle(c) : {...blank(), price: P.price, priceMode: P.priceMode}; if (c) { P.price = P.price || ''; } save(); return render(); }
-if (t.id === 'pl-liquid'){ P.liquid = t.checked; save(); $('pl-mllabel').textContent = P.liquid ? 'Vial size (mL)' : 'BAC water (mL)'; return calc(); }
+if (t.id === 'pl-liquid'){ P.liquid = t.checked; save(); $('pl-mllabel').textContent = P.liquid ? 'Vial size (mL)' : 'BAC water (mL)'; $('pl-bacrow').hidden = P.liquid; return calc(); }
 if (t.id === 'pl-indef'){ P.indefinite = t.checked; save(); $('pl-weeks').disabled = P.indefinite; return calc(); }
 if (map[t.id]){ P[map[t.id]] = t.value; save(); if (t.id === 'pl-dunit') renderSteps(); calc(); }
 });
