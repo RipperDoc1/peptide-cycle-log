@@ -77,6 +77,19 @@
 <div class="phead"><div><h2 id="waitTitle">Waiting for approval</h2><p id="waitSub"></p></div></div>
 <div class="pbody"><div class="actions"><button class="btn ghost" type="button" id="waitRefresh">Check again</button></div></div>
 </section>
+<section class="panel consent" id="consent" hidden>
+<div class="phead"><div><h2>Before you start</h2><p>Please read and agree to use Peptide Log.</p></div></div>
+<div class="pbody">
+<div class="cbox">
+<p><b>Peptide Log is for educational and tracking purposes only.</b> It is not medical advice, and it does not diagnose, treat or recommend doses for any condition.</p>
+<p>Dose conversions, syringe units, vial counts and costs are simple math based on what you enter. Always double-check them.</p>
+<p>Many peptides are not approved by the FDA for human use. Talk with your doctor or a licensed healthcare provider before starting, changing or stopping any compound.</p>
+</div>
+<label class="chk cchk"><input type="checkbox" id="cs-1"> I understand this app is for educational purposes only and is not medical advice.</label>
+<label class="chk cchk"><input type="checkbox" id="cs-2"> I will discuss all dosing and use with my doctor or a licensed healthcare provider.</label>
+<div class="actions" style="justify-content:space-between"><button type="button" class="link" id="csSignOut">Sign out</button><button type="button" class="btn" id="csAgree" disabled>I agree</button></div>
+<span class="err" id="csErr" role="alert"></span>
+</div></section>
 <div class="loading" id="loading">Loading…</div>
 <nav class="nav" id="nav" aria-label="Views" hidden>
 <button type="button" data-view="home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></svg><span>Today</span></button>
@@ -223,6 +236,7 @@
 <div class="set-group"><span class="label">Appearance</span>
 <div class="seg themeseg" role="radiogroup" aria-label="Appearance"><button type="button" role="radio" data-theme-set="light">Light</button><button type="button" role="radio" data-theme-set="dark">Dark</button><button type="button" role="radio" data-theme-set="auto">Auto</button></div>
 <span class="hint">Auto follows your phone’s setting.</span></div>
+<div class="set-group"><span class="label">Disclaimer</span><div class="setnote" id="setConsent"></div></div>
 <div class="set-group"><span class="label">Account</span>
 <button type="button" class="setitem" id="editProfile">Edit profile<span aria-hidden="true">›</span></button>
 <button type="button" class="setitem danger" id="signOut">Sign out</button></div>

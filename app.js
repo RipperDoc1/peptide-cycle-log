@@ -869,7 +869,7 @@ const pend = rows.filter(r => r.status === 'pending').length;
 const pillOf = {pending: 'upcoming', approved: 'active', paused: 'paused', blocked: 'complete'}, word = {pending: 'Waiting', approved: 'Approved', paused: 'Paused', blocked: 'Declined'};
 list.innerHTML = panel('Testers', testers == null ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'person' : 'people'} signed up${pend ? ` · ${pend} waiting for approval` : ''}. Only you can see this list.`,
 rows.length ? `<div class="uplist">${rows.map(r => `<div class="upday" style="grid-template-columns:minmax(0,1fr) auto;align-items:center">
-<div class="d"><b>${esc(r.name || 'Unnamed')}${r.you ? ' <span class="hint" style="display:inline">(you)</span>' : ''}</b><span class="tg">@${esc(r.telegram || '')}</span><span>Joined ${r.joined ? fmt(new Date(r.joined)) : '—'} · <span class="pill ${pillOf[r.status]}" style="padding:1px 8px">${word[r.status]}</span></span></div>
+<div class="d"><b>${esc(r.name || 'Unnamed')}${r.you ? ' <span class="hint" style="display:inline">(you)</span>' : ''}</b><span class="tg">@${esc(r.telegram || '')}</span><span>Joined ${r.joined ? fmt(new Date(r.joined)) : '—'} · <span class="pill ${pillOf[r.status]}" style="padding:1px 8px">${word[r.status]}</span></span><span>${r.consentAt ? 'Disclaimer accepted ' + fmt(new Date(r.consentAt)) : 'Disclaimer not accepted yet'}</span></div>
 <div class="tact">${r.you ? '' : delId === r.id
 ? `<span class="hint" style="flex-basis:100%;text-align:right">Delete ${esc(r.name)} and all their cycles?</span><button class="btn dangerfill" data-tdel="${r.id}">Delete</button><button class="btn ghost" data-tdelno="1">Keep</button>`
 : (r.status === 'approved'
@@ -1688,8 +1688,10 @@ const SB_URL = 'https://ojxscacnyybvtxffbere.supabase.co';
 const SB_KEY = 'sb_publishable_bo2h1xqaDYMqEaFNdQwNKA_dcfA_T9h';
 let sb = null, sessionUser = null, phase = 'loading', linkError = '';
 const alertRow = msg => { const el = document.querySelector('#list .phead p'); if (el) el.textContent = msg; };
+const CONSENT_V = '2026-10-24';
 function gate(){
 $('loading').hidden = phase !== 'loading';
+$('consent').hidden = phase !== 'consent';
 $('signin').hidden = phase !== 'signin';
 if (phase === 'signin' && linkError){ $('siErr').textContent = linkError; linkError = ''; }
 const need = phase === 'profile' || (editingProfile && (phase === 'app' || phase === 'waiting'));
@@ -1708,6 +1710,7 @@ $('setTg').textContent = profile && profile.telegram ? '@' + profile.telegram : 
 $('setEmail').textContent = sessionUser && sessionUser.email ? sessionUser.email : '';
 $('setInitial').textContent = ((profile && profile.name) || (sessionUser && sessionUser.email) || '?').trim().charAt(0).toUpperCase();
 $('editProfile').hidden = !profile;
+$('setConsent').textContent = profile && profile.consentAt ? `Accepted ${fmt(new Date(profile.consentAt))}: educational use only, not medical advice. Discuss all dosing with your doctor.` : 'Not accepted yet.';
 if (need){
 $('obTitle').textContent = profile ? 'Your profile' : 'Welcome';
 $('obSub').textContent = profile ? 'Update your name or Telegram username.' : 'Before you start, tell us who you are.';
@@ -1790,7 +1793,7 @@ try { const r = sb.auth.updateUser && sb.auth.updateUser({data: {whatsNew: WN_ID
 async function loadAll(){
 const cache = readCache();
 let fromCache = false;
-if (phase !== 'app' && cache && hasAuthToken()){
+if (phase !== 'app' && cache && hasAuthToken() && cache.profile && cache.profile.consentV === CONSENT_V){
 sessionUser = {id: cache.uid, email: cache.email}; profile = cache.profile; isOwner = cache.isOwner;
 cycles = (cache.cycles || []).map(normalize); fromCache = true;
 $('sync').textContent = 'Updating…'; phase = 'app'; gate();
@@ -1806,12 +1809,13 @@ const { data: { session }, error: se } = await sb.auth.getSession();
 if (!session && se && fromCache) return offline();
 sessionUser = session ? session.user : null;
 if (!sessionUser){ clearCache(); profile = null; cycles = []; isOwner = false; phase = 'signin'; return gate(); }
-const { data: prof, error } = await sb.from('profiles').select('name,telegram,status,is_admin,created_at').eq('id', sessionUser.id).maybeSingle();
+const { data: prof, error } = await sb.from('profiles').select('name,telegram,status,is_admin,created_at,consent_at,consent_version').eq('id', sessionUser.id).maybeSingle();
 if (error) throw error;
-profile = prof ? {name: prof.name, telegram: prof.telegram, status: prof.status, isAdmin: prof.is_admin, created: Date.parse(prof.created_at)} : null;
+profile = prof ? {name: prof.name, telegram: prof.telegram, status: prof.status, isAdmin: prof.is_admin, created: Date.parse(prof.created_at), consentAt: prof.consent_at || null, consentV: prof.consent_version || null} : null;
 isOwner = !!(profile && profile.isAdmin);
 if (!profile){ clearCache(); phase = 'profile'; return gate(); }
 if (profile.status !== 'approved'){ clearCache(); phase = 'waiting'; return gate(); }
+if (profile.consentV !== CONSENT_V){ phase = 'consent'; $('sync').textContent = ''; return gate(); }
 const { data: rows, error: e2 } = await sb.from('cycles').select('id,data').order('updated_at');
 if (e2) throw e2;
 cycles = (rows || []).map(r => normalize({...r.data, id: r.id}));
@@ -1837,9 +1841,9 @@ const { error } = await q; if (error) throw error;
 },
 };
 async function loadTesters(){
-const { data, error } = await sb.from('profiles').select('id,name,telegram,status,is_admin,created_at').order('created_at', {ascending: false});
+const { data, error } = await sb.from('profiles').select('id,name,telegram,status,is_admin,created_at,consent_at').order('created_at', {ascending: false});
 if (error) return;
-testers = data.map(r => ({id: r.id, name: r.name, telegram: r.telegram, status: r.status, joined: Date.parse(r.created_at), you: r.id === sessionUser.id}));
+testers = data.map(r => ({id: r.id, name: r.name, telegram: r.telegram, status: r.status, joined: Date.parse(r.created_at), consentAt: r.consent_at, you: r.id === sessionUser.id}));
 gate();
 }
 let delId = null;
@@ -1900,6 +1904,17 @@ $('ob-tg').addEventListener('input', e => { if (e.target.value.startsWith('@')) 
 $('obCancel').onclick = () => { editingProfile = false; gate(); };
 const openSettings = on => { $('settings').hidden = !on; $('settings').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); };
 $('settingsBtn').addEventListener('click', () => openSettings(true));
+const csSync = () => { $('csAgree').disabled = !($('cs-1').checked && $('cs-2').checked); };
+$('cs-1').addEventListener('change', csSync); $('cs-2').addEventListener('change', csSync);
+$('csSignOut').addEventListener('click', async () => { clearCache(); await sb.auth.signOut(); phase = 'loading'; view = 'home'; testers = null; loadAll(); });
+$('csAgree').addEventListener('click', async () => {
+const b = $('csAgree'); b.disabled = true; $('csErr').textContent = '';
+const at = new Date().toISOString();
+const { error } = await sb.from('profiles').update({consent_at: at, consent_version: CONSENT_V}).eq('id', sessionUser.id);
+if (error){ b.disabled = false; $('csErr').textContent = offMsg('Couldn\'t save. Try again.'); return; }
+profile.consentAt = at; profile.consentV = CONSENT_V; $('cs-1').checked = false; $('cs-2').checked = false;
+loadAll();
+});
 const openTools = on => { $('toolsPop').hidden = !on; $('toolsPop').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); };
 $('toolsBtn').addEventListener('click', () => openTools(true));
 document.addEventListener('click', e => { if (e.target.closest('[data-tools-close]')) openTools(false); });
