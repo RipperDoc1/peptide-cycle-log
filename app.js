@@ -2060,15 +2060,16 @@ $('plannerBody').innerHTML = `
 <div class="seg pseg" data-pk="bacBottle">${['3', '10', '30'].map(v => `<button type="button" data-pv="${v}" aria-checked="${String(P.bacBottle) === v}">${v} mL</button>`).join('')}</div></div></div>
 
 <div id="pl-results" aria-live="polite"></div>
-<div class="plactions">
-<button type="button" class="btn" data-plan-save>${P.pid ? 'Update protocol' : 'Save protocol'}</button>
+<div class="plactions" id="pl-actions">${actionsHtml()}</div>`;
+renderSteps(); renderPlDays(); calc();
+}
+function actionsHtml(){ return `<button type="button" class="btn" data-plan-save>${P.pid ? 'Update protocol' : 'Save protocol'}</button>
 ${P.pid ? '<button type="button" class="btn ghost" data-plan-saveas>Save as new</button>' : ''}
 <button type="button" class="btn ghost" data-plan-import>Start a cycle from this</button>
 <span class="plmsg" id="pl-msg" role="status"></span>
-<div class="plfoot"><button type="button" class="link" data-plan-reset>Clear</button>${P.pid ? '<button type="button" class="link del" data-plan-del>Delete protocol</button>' : ''}<button type="button" class="link" data-planner-home>Back to home</button></div>
-</div>`;
-renderSteps(); renderPlDays(); calc();
-}
+<div class="plfoot"><button type="button" class="link" data-plan-reset>Clear</button>${P.pid ? '<button type="button" class="link del" data-plan-del>Delete protocol</button>' : ''}<button type="button" class="link" data-planner-home>Back to home</button></div>`; }
+// refresh just the buttons so the page stays where it is
+function renderActions(){ const el = $('pl-actions'); if (el) el.innerHTML = actionsHtml(); }
 function renderPlDays(){
 const el = $('pl-days'); if (!el) return;
 if (!Array.isArray(P.days)) P.days = [1,2,3,4,5,6,0];
@@ -2189,14 +2190,14 @@ sv.disabled = true;
 const { error } = await sb.from('protocols').upsert({id, user_id: sessionUser.id, data, updated_at: new Date().toISOString()});
 sv.disabled = false;
 if (error) return msg(offMsg('Couldn\'t save. Try again.'), true);
-P.pid = id; save(); await loadProtos(); render(); msg(asNew ? 'Saved to your protocols.' : 'Protocol updated.');
+P.pid = id; save(); await loadProtos(); renderActions(); msg(asNew ? 'Saved to your protocols.' : 'Protocol updated.');
 })(); return; }
 if (e.target.closest('[data-plan-del]')){ (async () => {
 const del = e.target.closest('[data-plan-del]');
 if (del.dataset.sure !== '1'){ del.dataset.sure = '1'; del.textContent = 'Tap again to delete'; return; }
 const { error } = await sb.from('protocols').delete().eq('id', P.pid);
 if (error) return msg(offMsg('Couldn\'t delete. Try again.'), true);
-P.pid = ''; save(); await loadProtos(); render(); msg('Protocol deleted.');
+P.pid = ''; save(); await loadProtos(); renderActions(); msg('Protocol deleted.');
 })(); return; }
 if (e.target.closest('[data-plan-import]')){
 const dose = n2(P.doseAmt);
