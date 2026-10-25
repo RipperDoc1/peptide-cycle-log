@@ -785,3 +785,14 @@ header h1{padding-right:54px}
 .cchk input{margin-top:3px;flex:0 0 auto;width:20px;height:20px}
 .setnote{font-size:.9rem;color:var(--muted);background:var(--sunken);border-radius:var(--r-sm);padding:10px 12px;line-height:1.4}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+
+.protolist{display:flex;flex-direction:column;gap:8px;width:100%;text-align:left}
+.protolist .label{margin-top:6px}
+.protocard{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;color:var(--ink)}
+.protocard b{font-weight:700}
+.protocard span{color:var(--muted);font-size:.85rem}
+.plactions{display:flex;flex-direction:column;gap:10px}
+.plactions .btn{width:100%}
+.plfoot{display:flex;justify-content:space-between;gap:12px;margin-top:2px}
+.plmsg{font-size:.9rem;color:var(--ok);text-align:center;min-height:1.2em}
+.plmsg.bad{color:var(--danger)}

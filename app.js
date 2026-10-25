@@ -1964,7 +1964,7 @@ sync();
 // ---- Tools: cost & vial planner (a what-if calculator; nothing here changes your cycles) ----
 (function planner(){
 const PKEY = 'pcl-planner-v1';
-const blank = () => ({cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, days: [1,2,3,4,5,6,0], eod: false, weeks: 8, indefinite: false, titrate: false, steps: []});
+const blank = () => ({pid: '', cid: '', name: '', priceMode: 'vial', price: '', vialAmt: '', vialUnit: 'mg', liquid: false, ml: '', doseAmt: '', doseUnit: 'mg', perDay: 1, days: [1,2,3,4,5,6,0], eod: false, weeks: 8, indefinite: false, titrate: false, steps: []});
 let P = (() => { try { return {...blank(), ...JSON.parse(localStorage.getItem(PKEY) || '{}')}; } catch { return blank(); } })();
 const save = () => { try { localStorage.setItem(PKEY, JSON.stringify(P)); } catch {} };
 const fam = u => u === 'IU' ? 'IU' : 'mg';
@@ -1975,9 +1975,24 @@ const fmtAmt = (v, unit) => unit === 'IU' ? `${num(+v.toFixed(2))} IU` : v < 1 ?
 const open = on => { $('plannerPop').hidden = !on; $('plannerPop').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); if (on) render(); };
 document.addEventListener('click', e => {
 if (e.target.closest('[data-open-planner]')){ $('toolsPop').hidden = true; return open(true); }
+const pr = e.target.closest('[data-open-proto]'); if (pr){ const x = (protos || []).find(q => q.id === pr.dataset.openProto); if (x){ P = {...blank(), ...x.data, pid: x.id}; save(); $('toolsPop').hidden = true; return open(true); } }
 if (e.target.closest('[data-planner-close]')) return open(false);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('plannerPop').hidden) open(false); });
+
+// saved protocols (synced to the account)
+let protos = null;
+async function loadProtos(){ try { const { data, error } = await sb.from('protocols').select('id,data,updated_at').order('updated_at', {ascending: false}); if (!error) protos = data || []; } catch {} renderProtoList(); }
+function protoSummary(d){
+const days = d.eod ? 'Every other day' : (d.days || []).length === 7 ? 'Daily' : [1,2,3,4,5,6,0].filter(i => (d.days || []).includes(i)).map(i => DAYNAME[i]).join(', ');
+return [d.doseAmt ? `${d.titrate ? 'Start ' : ''}${d.doseAmt} ${d.doseUnit}${+d.perDay > 1 ? ' × ' + d.perDay : ''}` : '', days, d.indefinite ? 'Indefinite' : `${d.weeks} wks`, d.titrate && (d.steps || []).length ? `${d.steps.length} step${d.steps.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+}
+function renderProtoList(){
+const el = $('protoList'); if (!el) return;
+if (protos == null){ el.innerHTML = ''; return; }
+el.innerHTML = protos.length ? `<span class="label">Saved protocols</span>${protos.map(x => `<button type="button" class="protocard" data-open-proto="${x.id}"><b>${esc(x.data.name || 'Untitled')}</b><span>${esc(protoSummary(x.data))}</span></button>`).join('')}` : '';
+}
+$('toolsBtn').addEventListener('click', () => { renderProtoList(); loadProtos(); });
 
 // fill from one of your compounds
 function fromCycle(c){
@@ -2028,7 +2043,13 @@ $('plannerBody').innerHTML = `
 <label class="chk"><input type="checkbox" id="pl-indef"${P.indefinite ? ' checked' : ''}> Indefinite (show 3 months, 6 months and 1 year)</label></div>
 
 <div id="pl-results" aria-live="polite"></div>
-<div class="actions" style="justify-content:space-between"><button type="button" class="link" data-plan-reset>Clear</button><button type="button" class="btn" data-planner-close>Done</button></div>`;
+<div class="plactions">
+<button type="button" class="btn" data-plan-save>${P.pid ? 'Update protocol' : 'Save protocol'}</button>
+${P.pid ? '<button type="button" class="btn ghost" data-plan-saveas>Save as new</button>' : ''}
+<button type="button" class="btn ghost" data-plan-import>Start a cycle from this</button>
+<span class="plmsg" id="pl-msg" role="status"></span>
+<div class="plfoot"><button type="button" class="link" data-plan-reset>Clear</button>${P.pid ? '<button type="button" class="link del" data-plan-del>Delete protocol</button>' : ''}<button type="button" class="link" data-planner-close>Close</button></div>
+</div>`;
 renderSteps(); renderPlDays(); calc();
 }
 function renderPlDays(){
@@ -2126,6 +2147,38 @@ const pp = e.target.closest('[data-plpreset]'); if (pp){ if (pp.dataset.plpreset
 if (e.target.closest('[data-sadd]')){ const last = P.steps[P.steps.length - 1]; P.steps.push({week: last && parseInt(last.week, 10) ? parseInt(last.week, 10) + 2 : 3, dose: ''}); save(); renderSteps(); return calc(); }
 const rm = e.target.closest('[data-srm]'); if (rm){ P.steps.splice(+rm.dataset.srm, 1); save(); renderSteps(); return calc(); }
 if (e.target.closest('[data-plan-reset]')){ P = blank(); save(); return render(); }
+const msg = (t, bad) => { const m = $('pl-msg'); if (m){ m.textContent = t; m.classList.toggle('bad', !!bad); } };
+const sv = e.target.closest('[data-plan-save],[data-plan-saveas]');
+if (sv){ (async () => {
+if (!P.name.trim()) return msg('Give the protocol a name first.', true);
+const asNew = sv.hasAttribute('data-plan-saveas') || !P.pid;
+const id = asNew ? 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : P.pid;
+const data = {...P}; delete data.pid; delete data.cid;
+sv.disabled = true;
+const { error } = await sb.from('protocols').upsert({id, user_id: sessionUser.id, data, updated_at: new Date().toISOString()});
+sv.disabled = false;
+if (error) return msg(offMsg('Couldn\'t save. Try again.'), true);
+P.pid = id; save(); await loadProtos(); render(); msg(asNew ? 'Saved to your protocols.' : 'Protocol updated.');
+})(); return; }
+if (e.target.closest('[data-plan-del]')){ (async () => {
+const del = e.target.closest('[data-plan-del]');
+if (del.dataset.sure !== '1'){ del.dataset.sure = '1'; del.textContent = 'Tap again to delete'; return; }
+const { error } = await sb.from('protocols').delete().eq('id', P.pid);
+if (error) return msg(offMsg('Couldn\'t delete. Try again.'), true);
+P.pid = ''; save(); await loadProtos(); render(); msg('Protocol deleted.');
+})(); return; }
+if (e.target.closest('[data-plan-import]')){
+const dose = n2(P.doseAmt);
+if (!P.name.trim()) return msg('Give it a name first.', true);
+const steps = P.titrate ? P.steps.map(s => ({week: parseInt(s.week, 10), dose: n2(s.dose)})).filter(s => s.week >= 2 && s.dose > 0) : [];
+const c = {id: 'tmp-import', name: P.name.trim(), start: iso(today()), lenValue: P.indefinite ? null : Math.max(1, parseInt(P.weeks, 10) || 8), lenUnit: P.indefinite ? 'open' : 'weeks',
+days: P.eod ? [0,1,2,3,4,5,6] : (P.days || []).slice(), interval: P.eod ? 2 : null, perDay: +P.perDay || 1, dose, unit: P.doseUnit,
+vialMg: n2(P.vialAmt), bacMl: n2(P.ml), premixed: !!P.liquid && n2(P.vialAmt) > 0 && n2(P.ml) > 0, titrate: steps.length > 0, plan: steps, pauses: [], route: 'subq', times: []};
+open(false); setView('add', true); fillForm(c, false);
+editingId = null; $('f-start').value = iso(today()); $('formTitle').textContent = 'New cycle'; $('submitBtn').textContent = 'Save';
+$('dupWarn').innerHTML = '<b>Imported from the planner</b><span>Check the start date, route and details, then tap Save.</span>'; $('dupWarn').hidden = false;
+return;
+}
 });
 })();
 window.addEventListener('online', () => { if (phase === 'app') loadAll(); });
