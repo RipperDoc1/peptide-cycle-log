@@ -1690,6 +1690,7 @@ let sb = null, sessionUser = null, phase = 'loading', linkError = '';
 const alertRow = msg => { const el = document.querySelector('#list .phead p'); if (el) el.textContent = msg; };
 const CONSENT_V = '2026-10-24';
 function gate(){
+document.body.dataset.view = phase === 'app' ? view : phase;
 $('loading').hidden = phase !== 'loading';
 $('consent').hidden = phase !== 'consent';
 $('signin').hidden = phase !== 'signin';
@@ -1949,11 +1950,16 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && vialSheetI
 // light / dark toggle: remembers the choice on this device; otherwise follows the phone setting
 (function themeToggle(){
 const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+// the Halloween skin is temporary: offered until Nov 7, then anyone using it goes back to Auto
+const now = new Date(), spooky = now.getMonth() === 9 || (now.getMonth() === 10 && now.getDate() <= 7);
+const PICKS = ['light', 'dark', 'halloween'];
 const stored = () => { try { return localStorage.getItem('pcl-theme'); } catch { return null; } };
+if (!spooky && stored() === 'halloween'){ document.documentElement.removeAttribute('data-theme'); try { localStorage.removeItem('pcl-theme'); } catch {} }
+const hb = document.getElementById('themeHalloween'); if (hb) hb.hidden = !spooky;
 const cur = () => document.documentElement.getAttribute('data-theme') || (mq && mq.matches ? 'dark' : 'light');
-const sync = () => { const pick = stored() === 'light' || stored() === 'dark' ? stored() : 'auto';
+const sync = () => { const pick = PICKS.includes(stored()) ? stored() : 'auto';
 document.querySelectorAll('[data-theme-set]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.themeSet === pick)));
-document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', cur() === 'dark' ? '#0f1115' : '#f3f3f6')); };
+document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', cur() === 'halloween' ? '#0b0a0c' : cur() === 'dark' ? '#0f1115' : '#f3f3f6')); };
 document.addEventListener('click', e => { const b = e.target.closest('[data-theme-set]'); if (!b) return; const t = b.dataset.themeSet;
 if (t === 'auto'){ document.documentElement.removeAttribute('data-theme'); try { localStorage.removeItem('pcl-theme'); } catch {} }
 else { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('pcl-theme', t); } catch {} }

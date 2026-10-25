@@ -818,3 +818,28 @@ header h1{padding-right:54px}
 .plsup b{font-size:1.25rem;font-weight:800;line-height:1.15}
 .plsup span{color:var(--muted);font-size:.8rem}
 #pl-bacrow[hidden]{display:none}
+
+/* ---- Halloween skin (temporary): black background, light orange cards, spooky headers ---- */
+@font-face{font-family:"Griffy";src:url("vendor/griffy-400.woff2") format("woff2");font-weight:400;font-display:swap}
+.spooky{display:none}
+:root[data-theme="halloween"]{
+--bg:#0b0a0c; --bg-top:#1a0f06; --surface:#ffd3a3; --sunken:#ffe4c4; --ink:#2a1405; --muted:#7a4a22; --line:#f0b679;
+--accent:#3a1d07; --accent-ink:#ffd3a3; --accent-soft:#ffc68a; --hi:#d25a00;
+--ok:#2f7a2a; --ok-soft:#e7f2d6; --warn:#9a4a00; --warn-soft:#ffe0b8; --done:#7a4a22; --done-soft:#ffdcb6;
+--danger:#b3261e; --pause:#5e3a9e; --pause-soft:#efe2ff;
+--sel:#e8650f; --sel-ink:#140a02; --btn:#ffc68a; --btn-line:#f0aa63;
+--am:#c2410c;--am-soft:#ffe1c2;--pm:#a06400;--pm-soft:#fff0c9;--night:#5b3fa8;--night-soft:#eadfff;--any:#7a4a22;--any-soft:#ffe4c4;
+--shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(232,101,15,.12);
+--f-display:"Griffy","Figtree",system-ui,sans-serif; color-scheme:dark;
+}
+:root[data-theme="halloween"] h1,:root[data-theme="halloween"] h2{font-family:var(--f-display);font-weight:400;letter-spacing:.01em}
+/* text sitting straight on the black background */
+:root[data-theme="halloween"] header,:root[data-theme="halloween"] header h1,:root[data-theme="halloween"] .wrap > .hint,:root[data-theme="halloween"] .addrow{color:#ffb36b}
+:root[data-theme="halloween"] header .hint,:root[data-theme="halloween"] header p,:root[data-theme="halloween"] #sync{color:#c98a57}
+:root[data-theme="halloween"] .spooky{position:fixed;left:0;right:0;bottom:0;height:min(58vh,460px);z-index:0;pointer-events:none;opacity:.42}
+:root[data-theme="halloween"] .spooky svg{width:100%;height:100%;display:block}
+:root[data-theme="halloween"] body:not([data-view="home"]) .spooky{display:none}
+:root[data-theme="halloween"] body[data-view="home"] .spooky{display:block}
+:root[data-theme="halloween"] .wrap{position:relative;z-index:1}
+:root[data-theme="halloween"] .brandmark{color:#e8650f}
+:root[data-theme="halloween"] [data-theme-set]{white-space:nowrap}
