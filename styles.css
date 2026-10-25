@@ -796,3 +796,19 @@ header h1{padding-right:54px}
 .plfoot{display:flex;justify-content:space-between;gap:12px;margin-top:2px}
 .plmsg{font-size:.9rem;color:var(--ok);text-align:center;min-height:1.2em}
 .plmsg.bad{color:var(--danger)}
+
+/* full-screen tool pages */
+.pagewrap{position:fixed;inset:0;z-index:47;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.pagewrap.anim{animation:pagein .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes pagein{from{opacity:0;transform:translateX(24px)}}
+.planner.page{max-width:640px;margin:0 auto;min-height:100%;background:transparent;box-shadow:none;border-radius:0;padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
+.pagebar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:color-mix(in srgb,var(--bg) 88%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.homebtn{display:inline-flex;align-items:center;gap:2px;border:none;background:var(--sel);color:var(--sel-ink);font-weight:700;font-size:.95rem;padding:8px 14px 8px 8px;border-radius:999px}
+.homebtn svg{width:20px;height:20px}
+.pagetitle{font-weight:800;color:var(--muted);font-size:.95rem}
+.toolsback{border:1px solid var(--btn-line);background:var(--btn);color:var(--ink);font-weight:600;font-size:.88rem;padding:8px 14px;border-radius:999px}
+.planner.page .plan-body{padding:6px 16px 0}
+.planner.page .pgroup{background:var(--surface);box-shadow:var(--shadow)}
+.planner.page .pgroup input,.planner.page .pgroup select{background:var(--sunken)}
+.planner.page .pldays .day,.planner.page .pgroup .quick .link{background:var(--btn)}
+.planner.page .pldays .day[aria-pressed="true"],.planner.page .pgroup .quick .link.on{background:var(--sel);color:var(--sel-ink)}

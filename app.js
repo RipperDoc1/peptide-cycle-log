@@ -1972,11 +1972,21 @@ const toVial = (amt, unit) => unit === 'mcg' ? amt / 1000 : amt; // dose -> vial
 const money = n => '$' + (Math.round(n * 100) / 100).toLocaleString(undefined, {minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2});
 const n2 = v => { const x = parseFloat(v); return isFinite(x) ? x : null; };
 const fmtAmt = (v, unit) => unit === 'IU' ? `${num(+v.toFixed(2))} IU` : v < 1 ? `${num(+(v * 1000).toFixed(1))} mcg` : `${num(+v.toFixed(3))} mg`;
-const open = on => { $('plannerPop').hidden = !on; $('plannerPop').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); if (on) render(); };
+// the planner is a full screen with its own Home button (and the phone's back gesture closes it)
+const open = (on, fromPop) => {
+const was = !$('plannerPop').hidden;
+$('plannerPop').hidden = !on; $('plannerPop').classList.toggle('anim', on && !was);
+document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId);
+if (on){ render(); $('plannerPop').scrollTop = 0; if (!was) { try { history.pushState({planner: 1}, ''); } catch {} } }
+else if (was && !fromPop && history.state && history.state.planner){ try { history.back(); } catch {} }
+};
+window.addEventListener('popstate', () => { if (!$('plannerPop').hidden) open(false, true); });
 document.addEventListener('click', e => {
 if (e.target.closest('[data-open-planner]')){ $('toolsPop').hidden = true; return open(true); }
 const pr = e.target.closest('[data-open-proto]'); if (pr){ const x = (protos || []).find(q => q.id === pr.dataset.openProto); if (x){ P = {...blank(), ...x.data, pid: x.id}; save(); $('toolsPop').hidden = true; return open(true); } }
 if (e.target.closest('[data-planner-close]')) return open(false);
+if (e.target.closest('[data-planner-home]')){ open(false); if (view !== 'home') setView('home'); return; }
+if (e.target.closest('[data-planner-tools]')){ open(false); $('toolsBtn').click(); return; }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('plannerPop').hidden) open(false); });
 
@@ -2049,7 +2059,7 @@ $('plannerBody').innerHTML = `
 ${P.pid ? '<button type="button" class="btn ghost" data-plan-saveas>Save as new</button>' : ''}
 <button type="button" class="btn ghost" data-plan-import>Start a cycle from this</button>
 <span class="plmsg" id="pl-msg" role="status"></span>
-<div class="plfoot"><button type="button" class="link" data-plan-reset>Clear</button>${P.pid ? '<button type="button" class="link del" data-plan-del>Delete protocol</button>' : ''}<button type="button" class="link" data-planner-close>Close</button></div>
+<div class="plfoot"><button type="button" class="link" data-plan-reset>Clear</button>${P.pid ? '<button type="button" class="link del" data-plan-del>Delete protocol</button>' : ''}<button type="button" class="link" data-planner-home>Back to home</button></div>
 </div>`;
 renderSteps(); renderPlDays(); calc();
 }
