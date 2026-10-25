@@ -252,11 +252,27 @@
 <div class="set-group"><span class="label">Appearance</span>
 <div class="seg themeseg" role="radiogroup" aria-label="Appearance"><button type="button" role="radio" data-theme-set="light">Light</button><button type="button" role="radio" data-theme-set="dark">Dark</button><button type="button" role="radio" data-theme-set="auto">Auto</button><button type="button" role="radio" data-theme-set="halloween" id="themeHalloween">Halloween</button></div>
 <span class="hint">Auto follows your phone’s setting.</span></div>
+<div class="set-group"><span class="label">Contact me</span><button type="button" class="setitem" id="contactBtn">Send a suggestion or report an issue<span aria-hidden="true">›</span></button></div>
 <div class="set-group"><span class="label">Disclaimer</span><div class="setnote" id="setConsent"></div></div>
 <div class="set-group"><span class="label">Account</span>
 <button type="button" class="setitem" id="editProfile">Edit profile<span aria-hidden="true">›</span></button>
 <button type="button" class="setitem danger" id="signOut">Sign out</button></div>
 </div></div></div>
+<div class="sheet-wrap setwrap" id="contactPop" hidden>
+<div class="sheet-bg" data-contact-close></div>
+<div class="sheet setsheet" role="dialog" aria-modal="true" aria-labelledby="ctTitle">
+<div class="sheet-bar"><button type="button" class="sheet-x" data-contact-close aria-label="Close">✕</button></div>
+<form class="set-body" id="contactForm" novalidate>
+<h2 id="ctTitle">Contact me</h2>
+<p class="hint" style="margin-top:-6px">Ideas, bugs, anything that’s confusing. It goes straight to the developer.</p>
+<div class="seg pseg ctseg" role="radiogroup" aria-label="Type"><button type="button" role="radio" data-ct="suggestion" aria-checked="true">Suggestion</button><button type="button" role="radio" data-ct="issue" aria-checked="false">Issue</button></div>
+<label class="label" for="ctMsg" id="ctLabel">Your suggestion</label>
+<textarea id="ctMsg" rows="6" maxlength="4000" placeholder="What would make Peptide Log better?"></textarea>
+<span class="err" id="ctErr" role="alert"></span>
+<div class="actions"><button type="button" class="btn ghost" data-contact-close>Cancel</button><button type="submit" class="btn" id="ctSend">Send</button></div>
+</form>
+<div class="set-body ctdone" id="ctDone" hidden><h2>Thanks!</h2><p>Your message was sent. Every note gets read.</p><div class="actions"><button type="button" class="btn" data-contact-close>Done</button></div></div>
+</div></div>
 <div class="sheet-wrap setwrap" id="toolsPop" hidden>
 <div class="sheet-bg" data-tools-close></div>
 <div class="sheet setsheet" role="dialog" aria-modal="true" aria-labelledby="toolsTitle">

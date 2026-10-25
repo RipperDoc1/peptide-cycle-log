@@ -857,3 +857,13 @@ header h1{padding-right:54px}
 .hwpop .btn:not(.ghost){background:#e8650f;color:#140a02;border-color:#e8650f}
 .hwpop .btn.ghost{background:#2a1d14;color:#ffd3a3;border-color:#3d2a1c}
 .hwpop .sheet-bar{background:transparent;border:0}
+/* Contact me + owner feedback inbox */
+#contactPop textarea{width:100%;font:inherit;color:var(--ink);background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;resize:vertical;min-height:140px}
+.ctseg{margin-bottom:4px}
+.ctdone p{color:var(--muted);margin:0 0 12px}
+.fblist{display:flex;flex-direction:column;gap:10px}
+.fbrow{background:var(--sunken);border-radius:var(--r-md);padding:12px 14px}
+.fbhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fbhead .hint{display:inline}
+.fbhead .link{margin-left:auto;font-size:.82rem}
+.fbrow p{margin:6px 0 0;white-space:pre-wrap;line-height:1.45}

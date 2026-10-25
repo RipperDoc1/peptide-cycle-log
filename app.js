@@ -878,6 +878,9 @@ rows.length ? `<div class="uplist">${rows.map(r => `<div class="upday" style="gr
 + `<button class="btn ghost del" data-tdelask="${r.id}">Delete</button>`}</div>
 </div>`).join('')}</div>`
 : `<div class="pempty quiet"><h3>No testers yet.</h3><p>Send people the link. They sign in with their email, and you approve them here.</p></div>`);
+const nameOf = id => { const t = (testers || []).find(x => x.id === id); return t ? t.name || 'Unnamed' : 'Someone'; };
+list.insertAdjacentHTML('beforeend', panel('Feedback', feedback == null ? 'Loading…' : feedback.length ? `${feedback.length} message${feedback.length === 1 ? '' : 's'} from Contact me. Only you can see these.` : 'Messages people send from Settings → Contact me show up here.',
+(feedback || []).length ? `<div class="fblist">${feedback.map(f => `<div class="fbrow"><div class="fbhead"><span class="pill ${f.kind === 'issue' ? 'paused' : 'active'}" style="padding:1px 8px">${f.kind === 'issue' ? 'Issue' : 'Suggestion'}</span><b>${esc(nameOf(f.user_id))}</b><span class="hint">${fmt(new Date(f.created_at))}</span>${fbDel === f.id ? `<button class="link del" data-fbdel="${f.id}">Tap again to delete</button>` : `<button class="link" data-fbdelask="${f.id}" aria-label="Delete message">Delete</button>`}</div><p>${esc(f.message)}</p></div>`).join('')}</div>` : ''));
 return;
 }
 if (view === 'upcoming'){
@@ -1846,7 +1849,7 @@ if (profile.consentV !== CONSENT_V){ phase = 'consent'; $('sync').textContent = 
 const { data: rows, error: e2 } = await sb.from('cycles').select('id,data').order('updated_at');
 if (e2) throw e2;
 cycles = (rows || []).map(r => normalize({...r.data, id: r.id}));
-if (isOwner) loadTesters();
+if (isOwner) { loadTesters(); loadFeedback(); }
 $('sync').textContent = 'Synced to your account';
 phase = 'app'; gate(); writeCache(); maybeWhatsNew();
 } catch (err) {
@@ -1867,6 +1870,11 @@ const q = profile
 const { error } = await q; if (error) throw error;
 },
 };
+let feedback = null;
+async function loadFeedback(){
+const { data, error } = await sb.from('feedback').select('id,user_id,kind,message,created_at').order('created_at', {ascending: false});
+if (error) return; feedback = (data || []).slice(0, 100); if (view === 'testers') gate();
+}
 async function loadTesters(){
 const { data, error } = await sb.from('profiles').select('id,name,telegram,status,is_admin,created_at,consent_at').order('created_at', {ascending: false});
 if (error) return;
@@ -1874,6 +1882,14 @@ testers = data.map(r => ({id: r.id, name: r.name, telegram: r.telegram, status: 
 gate();
 }
 let delId = null;
+let fbDel = null;
+$('list').addEventListener('click', async e => {
+const ask = e.target.closest('[data-fbdelask]'); if (ask){ fbDel = ask.dataset.fbdelask; return renderList(); }
+const yes = e.target.closest('[data-fbdel]'); if (!yes) return;
+yes.disabled = true;
+const { error } = await sb.from('feedback').delete().eq('id', yes.dataset.fbdel);
+fbDel = null; if (!error) feedback = (feedback || []).filter(f => f.id !== yes.dataset.fbdel); renderList();
+});
 $('list').addEventListener('click', async e => {
 const ask = e.target.closest('[data-tdelask]'), no = e.target.closest('[data-tdelno]'), yes = e.target.closest('[data-tdel]');
 if (ask){ delId = ask.dataset.tdelask; return renderList(); }
@@ -1929,6 +1945,36 @@ finally { $('obSubmit').disabled = false; }
 });
 $('ob-tg').addEventListener('input', e => { if (e.target.value.startsWith('@')) e.target.value = e.target.value.replace(/^@+/, ''); });
 $('obCancel').onclick = () => { editingProfile = false; gate(); };
+// Contact me: saved to the feedback table, then emailed to the owner by the send-feedback function (address stays server side)
+let ctKind = 'suggestion';
+const openContact = on => {
+$('contactPop').hidden = !on; $('contactPop').classList.toggle('anim', on);
+document.documentElement.classList.toggle('sheet-open', on || !$('settings').hidden || !!sheetId || !!vialSheetId);
+if (on){ $('contactForm').hidden = false; $('ctDone').hidden = true; $('ctErr').textContent = ''; setTimeout(() => $('ctMsg').focus(), 50); }
+};
+const setCtKind = k => { ctKind = k; document.querySelectorAll('[data-ct]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.ct === k)));
+$('ctLabel').textContent = k === 'issue' ? 'What went wrong?' : 'Your suggestion';
+$('ctMsg').placeholder = k === 'issue' ? 'What happened, and what did you expect? Which screen were you on?' : 'What would make Peptide Log better?'; };
+$('ctMsg').addEventListener('input', () => { $('ctErr').textContent = ''; });
+$('contactBtn').addEventListener('click', () => { openSettings(false); openContact(true); });
+document.addEventListener('click', e => { if (e.target.closest('[data-contact-close]')) return openContact(false); const k = e.target.closest('[data-ct]'); if (k) setCtKind(k.dataset.ct); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('contactPop').hidden) openContact(false); });
+$('contactForm').addEventListener('submit', async e => {
+e.preventDefault();
+const text = $('ctMsg').value.trim();
+if (!text) return $('ctErr').textContent = 'Write a message first.';
+$('ctErr').textContent = ''; $('ctSend').disabled = true; $('ctSend').textContent = 'Sending…';
+const id = (crypto.randomUUID && crypto.randomUUID()) || ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+let theme = null; try { theme = localStorage.getItem('pcl-theme') || 'auto'; } catch {}
+const meta = {view, theme, ua: navigator.userAgent.slice(0, 200), at: new Date().toISOString()};
+const { error } = await sb.from('feedback').insert({id, user_id: sessionUser.id, kind: ctKind, message: text, meta});
+$('ctSend').disabled = false; $('ctSend').textContent = 'Send';
+if (error){ $('ctErr').textContent = navigator.onLine === false ? 'You’re offline. Try again when you’re connected.' : 'Couldn’t send. Try again.'; return; }
+try { if (sb.functions) sb.functions.invoke('send-feedback', {body: {id}}).catch(() => {}); } catch {}
+$('ctMsg').value = ''; setCtKind('suggestion');
+$('contactForm').hidden = true; $('ctDone').hidden = false;
+if (isOwner) loadFeedback();
+});
 const openSettings = on => { $('settings').hidden = !on; $('settings').classList.toggle('anim', on); document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId); };
 $('settingsBtn').addEventListener('click', () => openSettings(true));
 const csSync = () => { $('csAgree').disabled = !($('cs-1').checked && $('cs-2').checked); };
@@ -1956,7 +2002,7 @@ editingProfile = true;
 $('ob-name').value = profile.name; $('ob-tg').value = profile.telegram; $('obErr').textContent = '';
 gate(); $('ob-name').focus();
 });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isOwner && phase === 'app') loadTesters(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isOwner && phase === 'app') { loadTesters(); loadFeedback(); } });
 async function init(){
 resetForm();
 {
