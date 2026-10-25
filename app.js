@@ -2034,8 +2034,9 @@ $('plannerBody').innerHTML = `
 <div class="inline"><input id="pl-dose" type="number" min="0" step="any" inputmode="decimal" placeholder="0.25" value="${P.doseAmt}"><select id="pl-dunit">${['mg', 'mcg', 'IU'].map(u => `<option${P.doseUnit === u ? ' selected' : ''}>${u}</option>`).join('')}</select></div></div>
 <div class="prow2"><div class="field"><label class="label" for="pl-perday">Doses per day</label><select id="pl-perday">${[1, 2, 3, 4].map(k => `<option value="${k}"${+P.perDay === k ? ' selected' : ''}>${k}× a day</option>`).join('')}</select></div>
 </div>
-<div class="field"><span class="label">Days used</span><div class="days pldays" id="pl-days"></div>
-<div class="quick">${[['0,1,2,3,4,5,6', 'Daily'], ['1,2,3,4,5', 'Mon–Fri'], ['1,3,5', 'M / W / F'], ['1,4', 'Mon / Thu'], ['1', 'Weekly (Mon)'], ['eod', 'Every other day']].map(([v, l]) => `<button type="button" class="link" data-plpreset="${v}">${l}</button>`).join('')}</div></div>
+<div class="field"><span class="label">How often</span>
+<div class="quick">${[['0,1,2,3,4,5,6', 'Daily'], ['1', 'Once a week'], ['1,4', 'Twice a week'], ['1,3,5', '3× a week'], ['eod', 'Every other day']].map(([v, l]) => `<button type="button" class="link" data-plpreset="${v}">${l}</button>`).join('')}</div>
+<span class="hint">Or pick the exact days:</span><div class="days pldays" id="pl-days"></div></div>
 <div id="pl-steps"></div></div>
 
 <div class="pgroup"><span class="label">Length</span>
