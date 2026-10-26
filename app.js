@@ -79,7 +79,13 @@ let n = 0; for (let k = 0; k < i; k++) if (doseDay(c, k, sc[k]) && doseAtIndex(c
 return t[n % t.length];
 }
 const todsFor = (c, d) => isAlt(c) ? [slotOn(c, d)].filter(Boolean) : todsOf(c);
-const TOD_SHORT = {am: 'AM', pm: 'PM', night: 'Night'};
+const TOD_SHORT = {am: 'AM', pm: 'Noon', night: 'PM'};
+// small time label for Upcoming: AM / Noon / PM, or Multi when there's more than one dose that day
+const upTag = (c, d) => {
+if ((c.perDay || 1) > 1) return `<span class="todtag tod-multi">${TOD_ICON.any}Multi</span>`;
+const t = todsFor(c, d)[0];
+return t ? `<span class="todtag tod-${t}">${TOD_ICON[t]}${TOD_SHORT[t]}</span>` : '';
+};
 const todAltOn = () => $('f-todalt') && $('f-todalt').checked && (parseInt($('f-perday').value, 10) || 1) === 1;
 const todMax = () => todAltOn() ? 3 : (parseInt($('f-perday').value, 10) || 1);
 function syncTod(msg){
@@ -840,7 +846,7 @@ const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 
 const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show next 3 days' : `Show next 7 days${hidden ? ` (${hidden} more day${hidden === 1 ? '' : 's'})` : ''}`}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}${isAlt(c) && slotOn(c, d) ? `<span class="todtag tod-${slotOn(c, d)}">${TOD_SHORT[slotOn(c, d)]}</span>` : ''}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
+<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}${upTag(c, d)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 ;

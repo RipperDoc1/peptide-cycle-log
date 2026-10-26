@@ -889,3 +889,6 @@ header h1{padding-right:54px}
 :root[data-theme="skeleton"] body[data-view="home"] .bones{display:block}
 :root[data-theme="skeleton"] .wrap{position:relative;z-index:1}
 .hwrow{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.todtag svg{width:11px;height:11px;margin-right:3px;vertical-align:-1px}
+.todtag.tod-multi{background:var(--any-soft);color:var(--any)}
+.upitem .todtag{white-space:nowrap}
