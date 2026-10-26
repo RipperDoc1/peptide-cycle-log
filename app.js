@@ -1713,7 +1713,7 @@ $('listSec').hidden = !app || view === 'add';
 $('form').hidden = !app || view !== 'add';
 const out = sessionUser ? `<button type="button" class="link" id="signOut">Sign out</button>` : '';
 $('whoami').hidden = true; void out;
-$('settingsBtn').hidden = !sessionUser; $('toolsBtn').hidden = !sessionUser;
+$('settingsBtn').hidden = !sessionUser; $('toolsBtn').hidden = !sessionUser; $('calBtn').hidden = !sessionUser;
 if (!sessionUser) $('settings').hidden = true;
 $('setName').textContent = profile ? profile.name : (sessionUser ? 'Signed in' : '');
 $('setTg').textContent = profile && profile.telegram ? '@' + profile.telegram : '';
@@ -2296,6 +2296,76 @@ $('dupWarn').innerHTML = '<b>Imported from the planner</b><span>Check the start 
 return;
 }
 });
+})();
+// ---- Calendar: a month grid with a bar for each compound on the days it's in use ----
+(function calendar(){
+const PAL = ['#2f5fb3', '#d9632b', '#2f8a5b', '#7a5bc7', '#c98a00', '#c0392b', '#1f8a9e', '#b5487a', '#5a6b2e', '#6b7183'];
+let shown = null, picked = null; // first day of the month shown, and the tapped day
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const colorOf = (() => { const m = new Map(); return c => { const key = (c.name || '').trim().toLowerCase(); if (!m.has(key)) m.set(key, PAL[m.size % PAL.length]); return m.get(key); }; })();
+// days each compound is on cycle, and which of those are dose days
+function dayMap(c){
+const s = stats(c), sc = schedule(c), out = new Map();
+const open = (c.pauses || []).find(p => !p.to);
+const stopAt = s.status === 'paused' && open ? parse(open.from) : null;
+sc.forEach((d, i) => { if (stopAt && d >= stopAt) return; const dv = doseAtIndex(c, i); out.set(iso(d), {dose: doseDay(c, i, d) && dv !== 0, dv, i}); });
+return out;
+}
+function render(){
+const first = shown, y = first.getFullYear(), m = first.getMonth();
+const gridStart = addDays(first, -first.getDay());
+const last = new Date(y, m + 1, 0), gridEnd = addDays(last, 6 - last.getDay());
+const weeks = Math.round(diff(gridStart, gridEnd) / 7) + 1;
+const list = cycles.slice().sort((a, b) => a.name.localeCompare(b.name)).map(c => ({c, map: dayMap(c), col: colorOf(c)}));
+const t = iso(today());
+let html = `<div class="calhead"><button type="button" class="calnav" data-cal-move="-1" aria-label="Previous month">‹</button><h2 id="calMonth">${MONTHS[m]} ${y}</h2><button type="button" class="calnav" data-cal-move="1" aria-label="Next month">›</button></div>
+<div class="calgrid"><div class="caldow">${DAYNAME.map(n => `<span>${n[0]}</span>`).join('')}</div>`;
+const inMonth = new Set();
+for (let w = 0; w < weeks; w++){
+const days = [...Array(7)].map((_, k) => addDays(gridStart, w * 7 + k));
+const keys = days.map(iso);
+html += `<div class="calweek"><div class="calnums">${days.map((d, k) => `<button type="button" class="calnum${d.getMonth() !== m ? ' out' : ''}${keys[k] === t ? ' today' : ''}${keys[k] === picked ? ' picked' : ''}" data-cal-day="${keys[k]}" aria-label="${d.toDateString()}">${d.getDate()}</button>`).join('')}</div>`;
+list.forEach(({c, map, col}) => {
+if (!keys.some(k => map.has(k))) return;
+if (days.some(d => d.getMonth() === m && map.has(iso(d)))) inMonth.add(c.id);
+html += `<div class="callane" style="--c:${col}">${keys.map((k, x) => { const e = map.get(k); if (!e) return '<span></span>';
+const startRun = x === 0 || !map.has(keys[x - 1]), endRun = x === 6 || !map.has(keys[x + 1]);
+const label = startRun && (x === 0 || !map.has(keys[x - 1])) ? `<i>${esc(c.name)}</i>` : '';
+return `<span class="cb${e.dose ? ' dose' : ''}${startRun ? ' s' : ''}${endRun ? ' e' : ''}" data-cal-day="${k}">${label}</span>`; }).join('')}</div>`;
+});
+html += `</div>`;
+}
+html += `</div>`;
+const used = list.filter(x => inMonth.has(x.c.id));
+html += used.length ? `<div class="callegend">${used.map(({c, col}) => `<span style="--c:${col}"><b></b>${esc(c.name)}</span>`).join('')}</div><p class="hint calhint">Solid = dose day. Light = on cycle, no dose that day. Tap a day for details.</p>` : `<p class="hint calhint">No compounds in use this month.</p>`;
+if (picked){
+const d = parse(picked);
+const rows = list.map(x => ({...x, e: x.map.get(picked)})).filter(x => x.e);
+html += `<div class="calday"><h3>${d.toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'})}</h3>${rows.length ? rows.map(({c, col, e}) => `<div class="caldayrow" style="--c:${col}"><b></b><span class="n">${esc(c.name)}</span><span class="q">${e.dose ? (e.dv != null ? dosePair(c, e.dv).main + ((c.perDay || 1) > 1 ? ' × ' + c.perDay : '') : 'Dose day') : 'No dose'}</span></div>`).join('') : '<p class="hint">Nothing scheduled.</p>'}</div>`;
+}
+$('calBody').innerHTML = html;
+}
+const open = (on, fromPop) => {
+const was = !$('calPop').hidden;
+$('calPop').hidden = !on; $('calPop').classList.toggle('anim', on && !was);
+document.documentElement.classList.toggle('sheet-open', on || !!sheetId || !!vialSheetId);
+if (on){ if (!shown){ const t = today(); shown = new Date(t.getFullYear(), t.getMonth(), 1); } render(); $('calPop').scrollTop = 0; if (!was) { try { history.pushState({cal: 1}, ''); } catch {} } }
+else if (was && !fromPop && history.state && history.state.cal){ try { history.back(); } catch {} }
+};
+window.addEventListener('popstate', () => { if (!$('calPop').hidden) open(false, true); });
+$('calBtn').addEventListener('click', () => { picked = null; const t = today(); shown = new Date(t.getFullYear(), t.getMonth(), 1); open(true); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('calPop').hidden) open(false); });
+$('calPop').addEventListener('click', e => {
+if (e.target.closest('[data-cal-home]')){ open(false); if (view !== 'home') setView('home'); return; }
+if (e.target.closest('[data-cal-today]')){ const t = today(); shown = new Date(t.getFullYear(), t.getMonth(), 1); picked = iso(t); return render(); }
+const mv = e.target.closest('[data-cal-move]'); if (mv){ shown = new Date(shown.getFullYear(), shown.getMonth() + +mv.dataset.calMove, 1); picked = null; return render(); }
+const dd = e.target.closest('[data-cal-day]'); if (dd){ picked = picked === dd.dataset.calDay ? null : dd.dataset.calDay; render(); if (picked){ const el = document.querySelector('.calday'); if (el) el.scrollIntoView({block: 'nearest', behavior: 'smooth'}); } }
+});
+// swipe left/right to change months
+let sx = null, sy = null;
+$('calPop').addEventListener('touchstart', e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, {passive: true});
+$('calPop').addEventListener('touchend', e => { if (sx == null) return; const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy; sx = null;
+if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && e.target.closest('.calgrid')){ shown = new Date(shown.getFullYear(), shown.getMonth() + (dx < 0 ? 1 : -1), 1); picked = null; render(); } }, {passive: true});
 })();
 window.addEventListener('online', () => { if (phase === 'app') loadAll(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
