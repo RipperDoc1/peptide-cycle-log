@@ -921,3 +921,13 @@ header h1{padding-right:54px}
 .caldayrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
 .caldayrow .n{flex:1;font-weight:600}
 .caldayrow .q{color:var(--muted);font-size:.9rem}
+/* Today check-off */
+.trow.hastick{position:relative}
+.trow.hastick .crowhead{padding-right:58px}
+.tick{position:absolute;right:16px;top:50%;transform:translateY(-50%);z-index:1;width:34px;height:34px;border-radius:999px;border:2px solid var(--btn-line);background:var(--surface);color:transparent;display:grid;place-items:center;padding:0;transition:background .15s,border-color .15s,color .15s}
+.tick svg{width:18px;height:18px}
+.tick[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
+.trow.taken .cmain{opacity:.55}
+.trow.taken .cname{text-decoration:line-through;text-decoration-thickness:2px}
+.trow.hastick:has(.pickt) .tick{top:calc(50% - 22px)}
+.trow.hastick .crowhead .chev{display:none}

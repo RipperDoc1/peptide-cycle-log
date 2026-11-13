@@ -815,7 +815,7 @@ const coming = withStats.filter(x => x.s.status === 'upcoming');
 const due = running.filter(x => x.s.doseToday != null);
 const inj = due.reduce((n, x) => n + (x.c.perDay || 1), 0);
 const todaySub = !cycles.length ? 'Your daily doses appear here.'
-: due.length ? `${due.length} peptide${due.length > 1 ? 's' : ''} due today · ${inj} dose${inj > 1 ? 's' : ''}`
+: due.length ? `${due.length} peptide${due.length > 1 ? 's' : ''} due today · ${inj} dose${inj > 1 ? 's' : ''}${(() => { const t0 = today(); let n = 0, k = 0; due.forEach(x => { const ts = todsFor(x.c, t0); const slots = ts.length > 1 ? ts : ['all']; slots.forEach(sl => { n++; if (isTaken(x.c, sl)) k++; }); }); return k ? ` · ${k} of ${n} checked off` : ''; })()}`
 : 'Your daily doses appear here.';
 const nextUp = withStats.filter(x => x.s.status !== 'complete' && x.s.status !== 'paused' && x.s.next).sort((a,b) => a.s.next - b.s.next)[0];
 const todayBody = !cycles.length
@@ -1024,11 +1024,15 @@ return `<div class="crow"><button type="button" class="crowhead" data-act="sheet
 <span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 // Today: compact row (name, today's dose, day x of y, days left); tap to open the full card
+// checked-off doses for a day: c.taken = {'2026-11-13': ['all'] or ['am','night']}
+const takenOn = (c, d) => ((c.taken || {})[iso(d)] || []);
+const isTaken = (c, slot) => takenOn(c, today()).includes(slot);
 function trow(x, key, split){
 const {c, s} = x, on = openRows.has(key), open_ = isOpen(c), times = todsOf(c).length, per = split ? Math.max(1, Math.round((c.perDay || 1) / times)) : (c.perDay || 1);
 const sx = sec(c, s.doseToday);
 const prog = open_ ? `Day ${Math.max(s.elapsed, 0)} · Open-ended` : `Day ${Math.max(s.elapsed, 0)} of ${s.span} · ${s.remaining} day${s.remaining === 1 ? '' : 's'} left`;
-return `<div class="crow trow"><button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
+const slot = split && key.split('|')[1] && key.startsWith('home|') ? key.split('|')[1] : 'all', done = key.startsWith('home') && isTaken(c, slot);
+return `<div class="crow trow${key.startsWith('home') ? ' hastick' : ''}${done ? ' taken' : ''}">${key.startsWith('home') ? `<button type="button" class="tick" data-act="take" data-id="${c.id}" data-slot="${slot}" aria-pressed="${done}" aria-label="${done ? 'Taken. Tap to uncheck' : 'Mark as taken'}: ${esc(c.name)}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12.5 4 4 8-9"/></svg></button>` : ''}<button type="button" class="crowhead" data-act="sheet" data-id="${c.id}" aria-haspopup="dialog">
 ${(() => { const pct = open_ ? 1 : Math.min(Math.max(s.elapsed / s.span, 0), 1), C = 2 * Math.PI * 22; return `<span class="ring" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" class="rt"/><circle cx="26" cy="26" r="22" class="rf" stroke-dasharray="${C}" stroke-dashoffset="${open_ ? 0 : C * (1 - pct)}"/></svg><span class="rn">${open_ ? 'Day' : s.remaining}<small>${open_ ? Math.max(s.elapsed, 0) : 'left'}</small></span></span>`; })()}<span class="cmain"><span class="cname">${esc(c.name)}<span class="rchip r-${routeOf(c)}">${ROUTES[routeOf(c)][0]}</span></span><span class="tdose">${dosePair(c, s.doseToday).main}${per > 1 ? ` \u00d7 ${per}` : ''}${dosePair(c, s.doseToday).sub ? ` <span class="bu">${dosePair(c, s.doseToday).sub}</span>` : ''}</span>${!split && dayTotal(c, s.doseToday) ? `<span class="dtotal">${dayTotal(c, s.doseToday)}</span>` : ''}</span>
 <span class="chev" aria-hidden="true">›</span></button>${key.startsWith('home') && !todsOf(c).length ? `<button type="button" class="pickt" data-act="tod-pick" data-id="${c.id}">${TOD_ICON.any}<span>Pick time</span></button>` : ''}</div>`;
 }
@@ -1536,6 +1540,17 @@ b.disabled = true; return await startNext(c, v); }
 if (act === 'nx-snooze'){ await saveCycle({...c, snoozeUntil: iso(addDays(today(), 1))}, 'err'); return; }
 if (act === 'nx-stop'){ await saveCycle({...c, noRepeat: true}, 'err'); return; }
 } catch { b.disabled = false; msg(offMsg('Couldn\'t start the next round. Try again.')); }
+return;
+}
+if (b.dataset.act === 'take' && c){
+const day = iso(today()), slot = b.dataset.slot, cur = new Set((c.taken || {})[day] || []);
+cur.has(slot) ? cur.delete(slot) : cur.add(slot);
+const keep = iso(addDays(today(), -60)), taken = {};
+Object.entries(c.taken || {}).forEach(([k, v]) => { if (k >= keep && k !== day) taken[k] = v; });
+if (cur.size) taken[day] = [...cur];
+const next = {...c, taken}, prev = c;
+cycles = cycles.map(x => x.id === c.id ? next : x); renderList();
+try { await store.save(normalize(next)); } catch { cycles = cycles.map(x => x.id === c.id ? prev : x); renderList(); $('sync').textContent = offMsg('Couldn\'t save the check-off. Try again.'); }
 return;
 }
 if (b.dataset.act === 'tod-pick'){ todPick = {id: b.dataset.id, sel: new Set(), fresh: true}; renderList(); return; }
