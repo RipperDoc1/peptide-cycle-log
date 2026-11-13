@@ -931,3 +931,12 @@ header h1{padding-right:54px}
 .trow.taken .cname{text-decoration:line-through;text-decoration-thickness:2px}
 .trow.hastick:has(.pickt) .tick{top:calc(50% - 22px)}
 .trow.hastick .crowhead .chev{display:none}
+/* Vials: compact by default (name, % and bar); Expand shows the details */
+.vials.compact .vialhead{padding:8px 14px;gap:0}
+.vials.compact .vialmeter,.vials.compact .vm-sub{display:none}
+.vials.compact .vm-text{gap:5px}
+.vials.compact{gap:6px}
+.vials + .upmore{margin-top:12px}
+.vials.compact .vm-text{flex-direction:row;align-items:center;gap:12px}
+.vials.compact .vm-name{flex:0 0 52%;min-width:0}
+.vials.compact .vm-bar{flex:1}

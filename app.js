@@ -843,7 +843,7 @@ if (items.length) days.push({d, items});
 }
 const later = coming.filter(x => diff(t, x.s.start) > 7);
 const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 3), shownDays = upMore ? days : near, hidden = days.length - near.length;
-const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show next 3 days' : `Show next 7 days${hidden ? ` (${hidden} more day${hidden === 1 ? '' : 's'})` : ''}`}</button>` : '';
+const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show 3 days' : 'Expand to 7 days'}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
 <div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}${upTag(c, d)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
@@ -948,7 +948,8 @@ return `<section class="month"><div class="mhead"><h3>${label}</h3><span>${isNow
 function vialsPanel(rows, panel){
 const items = rows.map(x => ({x, v: vialStatus(x.c)})).filter(r => r.v);
 if (!items.length) return '';
-return panel('Vials', 'What\u2019s left in each vial you\u2019re using. Tap one to start a new vial.', `<div class="vials">${items.map(({x, v}) => vialRow(x.c, v, false)).join('')}</div>`);
+const more = openRows.has('vials|more');
+return panel('Vials', 'What\u2019s left in each vial you\u2019re using. Tap one to start a new vial.', `<div class="vials${more ? '' : ' compact'}">${items.map(({x, v}) => vialRow(x.c, v, false)).join('')}</div><button type="button" class="upmore" data-act="row" data-key="vials|more" aria-expanded="${more}">${more ? 'Compact view' : 'Expand'}</button>`);
 }
 function vialRow(c, v, inSheet){
 {
