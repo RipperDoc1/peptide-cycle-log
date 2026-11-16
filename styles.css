@@ -940,3 +940,10 @@ header h1{padding-right:54px}
 .vials.compact .vm-text{flex-direction:row;align-items:center;gap:12px}
 .vials.compact .vm-name{flex:0 0 52%;min-width:0}
 .vials.compact .vm-bar{flex:1}
+/* Upcoming: AM / Noon / PM groups inside each day */
+.upitems:has(.upg){gap:8px}
+.upg{border-radius:12px;padding:8px 10px 10px;display:flex;flex-direction:column;gap:8px}
+.upgh{display:flex;align-items:center;gap:6px;font-weight:800;font-size:.78rem;letter-spacing:.02em;text-transform:uppercase}
+.upgh .todi{width:20px;height:20px;border-radius:999px;display:grid;place-items:center;color:#fff;flex:0 0 auto}
+.upgh .todi svg{width:12px;height:12px}
+.upg.tod-am .upgh{color:var(--am)}.upg.tod-pm .upgh{color:var(--pm)}.upg.tod-night .upgh{color:var(--night)}.upg.tod-any .upgh{color:var(--any)}

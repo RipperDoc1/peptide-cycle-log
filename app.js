@@ -846,7 +846,7 @@ const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 
 const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show 3 days' : 'Expand to 7 days'}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
-<div class="upitems">${items.map(({c, dv}) => `<div class="upitem"><span class="n">${esc(c.name)}${upTag(c, d)}</span><span class="q"><b>${dosePair(c, dv).main}${(c.perDay||1) > 1 ? ' \u00d7 ' + c.perDay : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`).join('')}</div>
+<div class="upitems">${upGroups(d, items)}</div>
 </div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 ;
@@ -1025,6 +1025,17 @@ return `<div class="crow"><button type="button" class="crowhead" data-act="sheet
 <span class="pill ${s.status}">${s.status}</span><span class="chev" aria-hidden="true">›</span></button></div>`;
 }
 // Today: compact row (name, today's dose, day x of y, days left); tap to open the full card
+// Upcoming: one day's doses grouped into AM / Noon / PM (and Anytime for compounds with no time set)
+function upGroups(d, items){
+const groups = {am: [], pm: [], night: [], any: []};
+items.forEach(it => { const t = todsFor(it.c, d); (t.length ? t : ['any']).forEach(k => groups[k].push({...it, split: t.length > 1, slots: t.length})); });
+const item = ({c, dv, split, slots}) => { const per = split ? Math.max(1, Math.round((c.perDay || 1) / slots)) : (c.perDay || 1);
+return `<div class="upitem"><span class="n">${esc(c.name)}</span><span class="q"><b>${dosePair(c, dv).main}${per > 1 ? ' \u00d7 ' + per : ''}</b>${dosePair(c, dv).sub ? `<span class="u">${dosePair(c, dv).sub}</span>` : ''}</span>${!split && dayTotal(c, dv) ? `<span class="dtotal">${dayTotal(c, dv)}</span>` : ''}</div>`; };
+const used = Object.keys(groups).filter(k => groups[k].length);
+if (used.length === 1 && used[0] === 'any') return groups.any.map(item).join('');
+const LBL = {am: 'AM', pm: 'Noon', night: 'PM', any: 'Anytime'};
+return used.map(k => `<div class="upg tod-${k}"><div class="upgh"><span class="todi" aria-hidden="true">${TOD_ICON[k]}</span>${LBL[k]}</div>${groups[k].map(item).join('')}</div>`).join('');
+}
 // checked-off doses for a day: c.taken = {'2026-11-13': ['all'] or ['am','night']}
 const takenOn = (c, d) => ((c.taken || {})[iso(d)] || []);
 const isTaken = (c, slot) => takenOn(c, today()).includes(slot);
