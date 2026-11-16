@@ -842,12 +842,13 @@ items.push({c, dv, x: withStats.find(w => w.c === c)});
 if (items.length) days.push({d, items});
 }
 const later = coming.filter(x => diff(t, x.s.start) > 7);
-const upMore = openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= 3), shownDays = upMore ? days : near, hidden = days.length - near.length;
-const upToggle = hidden > 0 || upMore ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? 'Show 3 days' : 'Expand to 7 days'}</button>` : '';
+const upN = upDays(), upMore = upN < 7 && openRows.has('up|more'), near = days.filter(x => diff(t, x.d) <= upN), shownDays = upMore ? days : near, hidden = days.length - near.length;
+const upSpan = n => n === 1 ? 'tomorrow' : `the next ${n} days`;
+const upToggle = upN < 7 && (hidden > 0 || upMore) ? `<button type="button" class="upmore" data-act="row" data-key="up|more" aria-expanded="${upMore}">${upMore ? (upN === 1 ? 'Show 1 day' : `Show ${upN} days`) : 'Expand to 7 days'}</button>` : '';
 const upBody = (days.length ? (shownDays.length ? `<div class="uplist bubbles">${shownDays.map(({d, items}) => `<div class="upday">
 <div class="d"><b>${DAYNAME[d.getDay()]}</b><span>${fmt(d)}</span></div>
 <div class="upitems">${upGroups(d, items)}</div>
-</div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses in the next 3 days.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
+</div>`).join('')}</div>` : `<div class="pempty quiet"><h3>No doses ${upSpan(upN)}.</h3></div>`) + upToggle : `<div class="pempty quiet"><h3>There are no upcoming doses to show.</h3></div>`)
 + (later.length ? `<div class="upnote">${later.map(x => `${esc(x.c.name)} starts ${fmt(x.s.start)}`).join(' · ')}</div>` : '')
 ;
 const waiting = isOwner ? (testers || []).filter(r => r.status === 'pending') : [];
@@ -865,7 +866,7 @@ const needBox = needs.length ? `<section class="panel attn" role="alert"><div cl
 const pausedRows = withStats.filter(x => x.s.status === 'paused');
 const pausedBox = pausedRows.length ? panel('Paused', '', `<div class="pausedlist">${pausedRows.map(({c}) => `<div class="pauserow"><button type="button" class="pname" data-act="sheet" data-id="${c.id}">${esc(c.name)}</button><button type="button" class="btn unpause" data-act="unp" data-id="${c.id}">Unpause</button></div>`).join('')}</div>`) : '';
 list.innerHTML = alertBox + needBox + readyBox + panel('Today', todaySub, todayBody, badge) + pausedBox
-+ panel('Upcoming', upMore ? 'Your scheduled doses for the next 7 days.' : 'Your scheduled doses for the next 3 days.', upBody)
++ panel('Upcoming', `Your scheduled doses for ${upMore ? upSpan(7) : upSpan(upN)}.`, upBody)
 + vialsPanel(withStats.filter(x => x.s.status !== 'complete'), panel);
 return;
 }
@@ -1026,6 +1027,14 @@ return `<div class="crow"><button type="button" class="crowhead" data-act="sheet
 }
 // Today: compact row (name, today's dose, day x of y, days left); tap to open the full card
 // Upcoming: one day's doses grouped into AM / Noon / PM (and Anytime for compounds with no time set)
+// how many days Upcoming shows (Settings → Upcoming), saved on this device; default 1
+const UP_CHOICES = [1, 3, 5, 7];
+function upDays(){ let v = null; try { v = +localStorage.getItem('pcl-updays'); } catch {} return UP_CHOICES.includes(v) ? v : 1; }
+function syncUpDays(){ const n = upDays(); document.querySelectorAll('[data-updays]').forEach(b => b.setAttribute('aria-checked', String(+b.dataset.updays === n))); }
+document.addEventListener('click', e => { const b = e.target.closest('[data-updays]'); if (!b) return;
+try { localStorage.setItem('pcl-updays', b.dataset.updays); } catch {}
+openRows.delete('up|more'); syncUpDays(); if (phase === 'app') renderList(); });
+setTimeout(syncUpDays, 0);
 function upGroups(d, items){
 const groups = {am: [], pm: [], night: [], any: []};
 items.forEach(it => { const t = todsFor(it.c, d); (t.length ? t : ['any']).forEach(k => groups[k].push({...it, split: t.length > 1, slots: t.length})); });
